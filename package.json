@@ -1,0 +1,21 @@
+{
+  "name": "er-nexa",
+  "version": "1.0.0",
+  "description": "Er.NEXA — AI-Powered Project Knowledge Reconstruction Platform",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "desktop": "electron electron/main.cjs",
+    "build": "cd client && npm run build && cd ../server && npm run build",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build",
+    "lint": "cd client && npm run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^33.2.1"
+  }
+}
+
