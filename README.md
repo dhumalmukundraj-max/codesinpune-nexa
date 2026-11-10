@@ -148,7 +148,7 @@ Install the following before starting:
 ### Step 1: Clone the Repository
 
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
+git clone https://github.com/dhumalmukundraj-max/codesinpune-nexa.git
 ```
 
 Navigate into the project directory:
@@ -245,10 +245,10 @@ npm run lint
 ## 7. Live Demo & Deployment
 
 **Live Application URL:**  
-`[LIVE_DEMO_URL_TO_BE_ADDED]`
+https://lastcommit-nexa.vercel.app/
 
 **GitHub Repository:**  
-`[GITHUB_REPOSITORY_URL_TO_BE_ADDED]`
+https://github.com/dhumalmukundraj-max/codesinpune-nexa.git
 
 The live deployment link will be updated once the application is successfully deployed and publicly accessible.
 
