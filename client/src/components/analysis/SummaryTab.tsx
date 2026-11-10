@@ -36,9 +36,9 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
   const missingInfo = summary.missingOrContradictoryInformation || [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* 1. Project Introduction & Fact Grounding */}
-      <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-brand-border">
           <div>
             <div className="flex items-center gap-2">
@@ -120,7 +120,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
       </div>
 
       {/* 2. Important Project Decisions */}
-      <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm">
         <div className="flex items-center gap-2 pb-3 mb-4 border-b border-brand-border">
           <ShieldCheck className="w-5 h-5 text-brand-primary" />
           <h3 className="text-base font-bold text-brand-dark">Important Project Decisions</h3>
@@ -162,7 +162,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
       {/* 3. Existing Functionalities vs Unfinished Tasks */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Existing Functionalities */}
-        <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm flex flex-col">
+        <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm flex flex-col">
           <div className="flex items-center justify-between pb-3 mb-4 border-b border-brand-border">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
@@ -208,7 +208,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
         </div>
 
         {/* Unfinished Tasks */}
-        <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm flex flex-col">
+        <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm flex flex-col">
           <div className="flex items-center justify-between pb-3 mb-4 border-b border-brand-border">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-brand-primary" />
@@ -258,7 +258,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
       </div>
 
       {/* 4. Technical Documentation (Setup, Env, Scripts, API) */}
-      <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm">
         <div className="flex items-center gap-2 pb-3 mb-4 border-b border-brand-border">
           <BookOpen className="w-5 h-5 text-brand-primary" />
           <h3 className="text-base font-bold text-brand-dark">Technical Documentation</h3>
@@ -294,7 +294,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
             <div className="space-y-1.5">
               {techDocs.scripts?.length ? (
                 techDocs.scripts.map((sc, idx) => (
-                  <div key={idx} className="p-2 rounded-lg bg-stone-900 text-stone-100 flex items-center justify-between text-xs font-mono">
+                  <div key={idx} className="p-2 rounded-lg bg-stone-900 text-stone-100 flex flex-col xs:flex-row xs:items-center justify-between text-xs font-mono gap-1">
                     <span className="text-amber-300">{sc.command}</span>
                     <span className="text-[11px] text-stone-400 font-sans">{sc.purpose}</span>
                   </div>
@@ -347,7 +347,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
       </div>
 
       {/* 5. Dependencies and Responsibilities */}
-      <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm">
         <div className="flex items-center gap-2 pb-3 mb-4 border-b border-brand-border">
           <PackageCheck className="w-5 h-5 text-brand-primary" />
           <h3 className="text-base font-bold text-brand-dark">Dependencies & Architectural Responsibilities</h3>
@@ -383,7 +383,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
       {/* 6. Discussions, Communications & Future Plans */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Discussions & Communications */}
-        <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm">
           <div className="flex items-center gap-2 pb-3 mb-4 border-b border-brand-border">
             <MessagesSquare className="w-5 h-5 text-brand-primary" />
             <h3 className="text-base font-bold text-brand-dark">Available Discussions & Records</h3>
@@ -429,7 +429,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
         </div>
 
         {/* Future Plans & Pending Actions */}
-        <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm">
           <div className="flex items-center gap-2 pb-3 mb-4 border-b border-brand-border">
             <ArrowRight className="w-5 h-5 text-brand-primary" />
             <h3 className="text-base font-bold text-brand-dark">Future Plans & Pending Actions</h3>
@@ -454,7 +454,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
 
       {/* 7. Missing or Contradictory Information */}
       {missingInfo.length > 0 && (
-        <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 shadow-sm">
+        <div className="bg-amber-50 rounded-2xl border border-amber-200 p-4 sm:p-6 shadow-sm">
           <div className="flex items-center gap-2 pb-3 mb-3 border-b border-amber-200 text-amber-900">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
             <h3 className="text-base font-bold">Missing or Contradictory Information Detected</h3>

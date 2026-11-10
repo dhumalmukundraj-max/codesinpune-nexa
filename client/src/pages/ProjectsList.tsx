@@ -41,11 +41,11 @@ export const ProjectsList: React.FC = () => {
   );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-brand-dark tracking-tight">Saved Projects</h1>
+          <h1 className="text-xl sm:text-2xl font-black text-brand-dark tracking-tight">Saved Projects</h1>
           <p className="text-xs text-brand-muted mt-1">
             Browse and manage all reconstructed software knowledge models.
           </p>
@@ -53,7 +53,7 @@ export const ProjectsList: React.FC = () => {
 
         <Link
           to="/new-analysis"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-brand-primary-hover shadow-sm transition self-start sm:self-auto"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-brand-primary-hover shadow-sm transition w-full sm:w-auto self-start sm:self-auto active:scale-95"
         >
           <Sparkles className="w-4 h-4" />
           <span>New Analysis</span>
@@ -62,7 +62,7 @@ export const ProjectsList: React.FC = () => {
 
       {/* Search and Filters */}
       <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-md">
+        <div className="relative w-full sm:max-w-md">
           <Search className="w-4 h-4 text-brand-muted absolute left-3 top-2.5" />
           <input
             type="text"
@@ -78,7 +78,7 @@ export const ProjectsList: React.FC = () => {
       {loading ? (
         <div className="py-16 text-center text-xs text-brand-muted">Loading projects...</div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-brand-border p-12 text-center space-y-3">
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-brand-border p-8 sm:p-12 text-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-brand-bg text-brand-muted mx-auto flex items-center justify-center">
             <FolderGit2 className="w-6 h-6" />
           </div>
@@ -88,11 +88,11 @@ export const ProjectsList: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {filtered.map((proj) => (
             <div
               key={proj.id}
-              className="p-5 rounded-2xl border border-brand-border bg-white hover:border-brand-primary/40 transition shadow-sm flex flex-col justify-between"
+              className="p-4 sm:p-5 rounded-2xl border border-brand-border bg-white hover:border-brand-primary/40 transition shadow-sm flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-start justify-between gap-2 mb-2">

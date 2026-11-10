@@ -35,6 +35,15 @@ body {
   background: #B9AD95;
 }
 
+/* Hide scrollbar for smooth mobile horizontal scroll tabs */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Draggable region for Electron window */
 .app-drag-region {
   -webkit-app-region: drag;

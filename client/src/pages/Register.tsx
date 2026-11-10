@@ -35,14 +35,14 @@ export const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl border border-brand-border p-8 shadow-sm">
+    <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4 sm:p-6">
+      <div className="max-w-md w-full bg-white rounded-2xl sm:rounded-3xl border border-brand-border p-5 sm:p-8 shadow-sm">
         {/* Brand */}
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-brand-primary flex items-center justify-center text-white mb-3 shadow-md">
-            <Cpu className="w-6 h-6" />
+        <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-brand-primary flex items-center justify-center text-white mb-3 shadow-md">
+            <Cpu className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <h1 className="text-2xl font-black text-brand-dark tracking-tight">Create Er.NEXA Account</h1>
+          <h1 className="text-xl sm:text-2xl font-black text-brand-dark tracking-tight">Create Er.NEXA Account</h1>
           <p className="text-xs text-brand-muted mt-1">
             Reconstruct, secure, and handover software codebases with AI.
           </p>

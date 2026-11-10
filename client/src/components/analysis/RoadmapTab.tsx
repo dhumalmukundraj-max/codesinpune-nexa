@@ -12,10 +12,10 @@ export const RoadmapTab: React.FC<RoadmapTabProps> = ({ roadmap }) => {
   const immediateNextSteps = roadmap?.immediateNextSteps || [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* 1. Immediate Next Steps Banner */}
       {immediateNextSteps.length > 0 && (
-        <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm">
           <div className="flex items-center gap-2 pb-3 mb-4 border-b border-brand-border">
             <ArrowRight className="w-5 h-5 text-brand-primary" />
             <h3 className="text-base font-bold text-brand-dark">Priority Next Steps</h3>
@@ -37,7 +37,7 @@ export const RoadmapTab: React.FC<RoadmapTabProps> = ({ roadmap }) => {
       )}
 
       {/* 2. Development Roadmap Timeline / Phases */}
-      <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm">
         <div className="flex items-center justify-between pb-3 mb-6 border-b border-brand-border">
           <div className="flex items-center gap-2">
             <Milestone className="w-5 h-5 text-brand-primary" />

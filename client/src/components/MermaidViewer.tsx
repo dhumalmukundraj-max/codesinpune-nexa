@@ -125,6 +125,25 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, title = 'Di
 
   const handleMouseUp = () => setIsDragging(false);
 
+  // Mobile Touch Pan Handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (showCode || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setIsDragging(true);
+    setDragStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setPan({
+      x: touch.clientX - dragStart.x,
+      y: touch.clientY - dragStart.y,
+    });
+  };
+
+  const handleTouchEnd = () => setIsDragging(false);
+
   const copyCode = () => {
     navigator.clipboard.writeText(cleanChart);
     setCopied(true);
@@ -245,25 +264,25 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, title = 'Di
   return (
     <div className="flex flex-col border border-brand-border rounded-xl bg-white overflow-hidden shadow-sm">
       {/* Diagram Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-brand-border bg-brand-bg/50">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3 sm:px-4 py-2.5 border-b border-brand-border bg-brand-bg/50">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-brand-dark">{title}</span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-brand-secondary/30 text-brand-dark font-medium">
+          <span className="text-xs sm:text-sm font-bold text-brand-dark">{title}</span>
+          <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-brand-secondary/30 text-brand-dark font-medium">
             Mermaid.js
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
           {/* Zoom Controls */}
           {!showCode && (
-            <div className="flex items-center gap-1 bg-white border border-brand-border rounded-lg p-0.5 mr-2">
+            <div className="flex items-center gap-0.5 sm:gap-1 bg-white border border-brand-border rounded-lg p-0.5">
               <button
                 type="button"
                 onClick={handleZoomIn}
                 title="Zoom In"
                 className="p-1 text-brand-muted hover:text-brand-dark hover:bg-brand-bg rounded transition"
               >
-                <ZoomIn className="w-4 h-4" />
+                <ZoomIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
               <button
                 type="button"
@@ -271,7 +290,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, title = 'Di
                 title="Zoom Out"
                 className="p-1 text-brand-muted hover:text-brand-dark hover:bg-brand-bg rounded transition"
               >
-                <ZoomOut className="w-4 h-4" />
+                <ZoomOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
               <button
                 type="button"
@@ -279,7 +298,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, title = 'Di
                 title="Reset View"
                 className="p-1 text-brand-muted hover:text-brand-dark hover:bg-brand-bg rounded transition"
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
               <button
                 type="button"
@@ -287,10 +306,10 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, title = 'Di
                 title="Fit Diagram to Frame"
                 className="p-1 text-brand-muted hover:text-brand-dark hover:bg-brand-bg rounded transition flex items-center gap-1 text-[11px] px-1.5"
               >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Fit</span>
+                <Maximize2 className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                <span className="text-[10px] sm:text-[11px]">Fit</span>
               </button>
-              <span className="text-xs px-1.5 text-brand-muted font-mono">{Math.round(zoom * 100)}%</span>
+              <span className="text-[10px] sm:text-xs px-1 text-brand-muted font-mono">{Math.round(zoom * 100)}%</span>
             </div>
           )}
 
@@ -298,10 +317,10 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, title = 'Di
           <button
             type="button"
             onClick={() => setShowCode(!showCode)}
-            className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-brand-border bg-white text-brand-dark hover:bg-brand-bg transition"
+            className="flex items-center gap-1 text-xs px-2 sm:px-2.5 py-1.5 rounded-lg border border-brand-border bg-white text-brand-dark hover:bg-brand-bg transition active:scale-95"
           >
             {showCode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
-            <span>{showCode ? 'View Diagram' : 'Mermaid Code'}</span>
+            <span className="hidden xs:inline">{showCode ? 'View Diagram' : 'Mermaid Code'}</span>
           </button>
 
           {/* Copy Code */}
@@ -309,16 +328,16 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, title = 'Di
             type="button"
             onClick={copyCode}
             title="Copy Mermaid Code"
-            className="p-1.5 rounded-lg border border-brand-border bg-white text-brand-muted hover:text-brand-dark hover:bg-brand-bg transition"
+            className="p-1.5 rounded-lg border border-brand-border bg-white text-brand-muted hover:text-brand-dark hover:bg-brand-bg transition active:scale-95"
           >
-            {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+            {copied ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" /> : <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           </button>
 
           {/* Download Menu */}
           <div className="relative group">
             <button
               type="button"
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-brand-primary text-white hover:bg-brand-primary-hover transition"
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-brand-primary text-white hover:bg-brand-primary-hover transition active:scale-95"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export</span>
@@ -350,7 +369,11 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, title = 'Di
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className={`relative min-h-[420px] max-h-[620px] overflow-hidden flex items-center justify-center p-6 ${
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        className={`relative min-h-[320px] sm:min-h-[420px] max-h-[620px] overflow-hidden flex items-center justify-center p-3 sm:p-6 ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         } ${showCode ? 'bg-stone-900 cursor-auto' : 'bg-[#FAF7F2]'}`}
       >

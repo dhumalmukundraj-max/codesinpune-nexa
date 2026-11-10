@@ -8,17 +8,23 @@ import {
   LogOut, 
   Layers, 
   Cpu, 
-  ShieldCheck,
+  X,
   User as UserIcon 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { launchAssistantWindow } from '../lib/api';
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
+    if (onClose) onClose();
     await logout();
     navigate('/login');
   };
@@ -30,11 +36,15 @@ export const Sidebar: React.FC = () => {
     { to: '/reviews', label: 'Reviews & Handover', icon: ClipboardCheck },
   ];
 
-  return (
-    <aside className="w-64 bg-white border-r border-brand-border flex flex-col h-screen sticky top-0 select-none">
+  const handleNavClick = () => {
+    if (onClose) onClose();
+  };
+
+  const renderContent = (isMobile: boolean = false) => (
+    <div className="flex flex-col h-full select-none">
       {/* Brand Header */}
-      <div className="p-6 border-b border-brand-border flex items-center justify-between">
-        <NavLink to="/" className="flex items-center gap-3 group">
+      <div className="p-5 sm:p-6 border-b border-brand-border flex items-center justify-between">
+        <NavLink to="/" onClick={handleNavClick} className="flex items-center gap-3 group">
           <div className="w-9 h-9 rounded-xl bg-brand-primary flex items-center justify-center text-white shadow-sm transition group-hover:scale-105">
             <Cpu className="w-5 h-5" />
           </div>
@@ -48,10 +58,21 @@ export const Sidebar: React.FC = () => {
             <p className="text-[11px] text-brand-muted">AI Knowledge Engine</p>
           </div>
         </NavLink>
+
+        {isMobile && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-brand-muted hover:text-brand-dark hover:bg-brand-bg transition"
+            aria-label="Close menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
+      <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
         <div className="px-3 pb-2 text-[11px] font-semibold text-brand-muted uppercase tracking-wider">
           Platform
         </div>
@@ -63,6 +84,7 @@ export const Sidebar: React.FC = () => {
               key={item.to}
               to={item.to}
               end={item.to === '/'}
+              onClick={handleNavClick}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${
                   isActive
@@ -79,7 +101,7 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* Floating Assistant Launcher Quick Pill */}
-      <div className="p-4 mx-4 mb-4 rounded-xl bg-brand-bg border border-brand-border/80">
+      <div className="p-3.5 sm:p-4 mx-3 sm:mx-4 mb-3 sm:mb-4 rounded-xl bg-brand-bg border border-brand-border/80">
         <div className="flex items-center gap-2 mb-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           <span className="text-xs font-semibold text-brand-dark">Desktop Assistant</span>
@@ -89,8 +111,11 @@ export const Sidebar: React.FC = () => {
         </p>
         <button
           type="button"
-          onClick={() => launchAssistantWindow('')}
-          className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-lg bg-stone-900 text-stone-100 hover:bg-black transition"
+          onClick={() => {
+            if (onClose) onClose();
+            launchAssistantWindow('');
+          }}
+          className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold py-2 px-3 rounded-lg bg-stone-900 text-stone-100 hover:bg-black transition active:scale-[0.98]"
         >
           <Layers className="w-3.5 h-3.5 text-brand-secondary" />
           <span>Launch Companion</span>
@@ -122,7 +147,30 @@ export const Sidebar: React.FC = () => {
           </button>
         )}
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar (hidden on mobile, visible from lg: 1024px upwards) */}
+      <aside className="hidden lg:flex w-64 bg-white border-r border-brand-border flex-col h-screen sticky top-0 select-none z-30">
+        {renderContent(false)}
+      </aside>
+
+      {/* Mobile Drawer Navigation (visible on screens < 1024px when isOpen is true) */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={onClose}
+          />
+          {/* Drawer Sheet */}
+          <aside className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white shadow-2xl flex flex-col h-full z-10 animate-in slide-in-from-left duration-200">
+            {renderContent(true)}
+          </aside>
+        </div>
+      )}
+    </>
   );
 };
-

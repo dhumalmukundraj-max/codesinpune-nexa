@@ -46,7 +46,7 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-brand-border">
+      <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6 shadow-2xl border border-brand-border">
         <div className="flex items-center justify-between pb-3 border-b border-brand-border">
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-brand-primary" />

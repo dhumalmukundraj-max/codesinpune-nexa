@@ -449,10 +449,10 @@ export const NewAnalysis: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
       {/* Title */}
       <div>
-        <h1 className="text-2xl font-black text-brand-dark tracking-tight">Project Analysis & Ingestion</h1>
+        <h1 className="text-xl sm:text-2xl font-black text-brand-dark tracking-tight">Project Analysis & Ingestion</h1>
         <p className="text-xs text-brand-muted mt-1">
           Supply a project directory, ZIP archive, or repository to reconstruct its knowledge base using Google Gemini.
         </p>
@@ -460,7 +460,7 @@ export const NewAnalysis: React.FC = () => {
 
       {/* Analysis Input Form (hidden if analysisResult is ready, but can be reset) */}
       {!analysisResult && (
-        <div className="bg-white rounded-3xl border border-brand-border p-6 shadow-sm space-y-6">
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-brand-border p-4 sm:p-6 shadow-sm space-y-6">
           {/* Mode Selector Tabs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1.5 rounded-2xl bg-brand-bg border border-brand-border">
             <button
@@ -606,7 +606,7 @@ export const NewAnalysis: React.FC = () => {
               <label className="block text-xs font-semibold text-brand-dark">
                 Local Directory Path (Desktop Companion / Server Host)
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   value={localPath}
@@ -618,7 +618,7 @@ export const NewAnalysis: React.FC = () => {
                   type="button"
                   onClick={() => triggerPreview({})}
                   disabled={!localPath || loadingPreview}
-                  className="px-4 py-2 bg-stone-900 text-stone-100 rounded-xl text-xs font-semibold hover:bg-black disabled:opacity-50 transition"
+                  className="w-full sm:w-auto px-4 py-2 bg-stone-900 text-stone-100 rounded-xl text-xs font-semibold hover:bg-black disabled:opacity-50 transition"
                 >
                   {loadingPreview ? 'Scanning...' : 'Scan Directory'}
                 </button>
@@ -636,7 +636,7 @@ export const NewAnalysis: React.FC = () => {
                 <label className="block text-xs font-semibold text-brand-dark mb-1">
                   GitHub Repository URL
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
                     value={githubUrl}
@@ -648,7 +648,7 @@ export const NewAnalysis: React.FC = () => {
                     type="button"
                     onClick={() => triggerPreview({})}
                     disabled={!githubUrl || loadingPreview}
-                    className="px-4 py-2 bg-stone-900 text-stone-100 rounded-xl text-xs font-semibold hover:bg-black disabled:opacity-50 transition"
+                    className="w-full sm:w-auto px-4 py-2 bg-stone-900 text-stone-100 rounded-xl text-xs font-semibold hover:bg-black disabled:opacity-50 transition"
                   >
                     {loadingPreview ? 'Fetching...' : 'Fetch Repo'}
                   </button>
@@ -835,12 +835,12 @@ export const NewAnalysis: React.FC = () => {
               </div>
 
               {/* Trigger AI Analysis Button */}
-              <div className="pt-3 flex justify-end">
+              <div className="pt-3 flex justify-stretch sm:justify-end">
                 <button
                   type="button"
                   onClick={handleRunAnalysis}
                   disabled={isAnalyzing}
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-brand-primary-hover shadow-md transition disabled:opacity-50"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-brand-primary-hover shadow-md transition disabled:opacity-50 active:scale-95"
                 >
                   <Sparkles className="w-4 h-4" />
                   <span>Start AI Knowledge Reconstruction</span>
@@ -877,7 +877,7 @@ export const NewAnalysis: React.FC = () => {
       {analysisResult && (
         <div className="space-y-6">
           {/* Header Bar with Save & Assistant Launcher */}
-          <div className="bg-white rounded-3xl border border-brand-border p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-brand-border p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
@@ -885,16 +885,16 @@ export const NewAnalysis: React.FC = () => {
                   Knowledge Reconstructed
                 </span>
               </div>
-              <h2 className="text-2xl font-black text-brand-dark mt-1">
+              <h2 className="text-xl sm:text-2xl font-black text-brand-dark mt-1">
                 {customName || analysisResult.project.name}
               </h2>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setAnalysisResult(null)}
-                className="px-4 py-2 text-xs font-semibold text-stone-600 hover:text-stone-900 rounded-xl"
+                className="px-3.5 py-2 text-xs font-semibold text-stone-600 hover:text-stone-900 rounded-xl"
               >
                 Reset / New
               </button>
@@ -909,7 +909,7 @@ export const NewAnalysis: React.FC = () => {
                       launchAssistantWindow(persistedId);
                     }
                   }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-900 text-stone-100 text-xs font-bold hover:bg-black transition shadow-sm"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-900 text-stone-100 text-xs font-bold hover:bg-black transition shadow-sm active:scale-95"
                 >
                   <Layers className="w-4 h-4 text-brand-secondary" />
                   <span>Launch Assistant</span>
@@ -920,7 +920,7 @@ export const NewAnalysis: React.FC = () => {
                 type="button"
                 onClick={handleSaveProject}
                 disabled={isSaving || savedSuccess}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-brand-primary-hover shadow-sm transition disabled:opacity-50"
+                className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-brand-primary-hover shadow-sm transition disabled:opacity-50 active:scale-95"
               >
                 <Save className="w-4 h-4" />
                 <span>{savedSuccess ? 'Saved to Supabase!' : isSaving ? 'Saving...' : 'Save Project'}</span>
@@ -929,7 +929,7 @@ export const NewAnalysis: React.FC = () => {
           </div>
 
           {/* 5 Tab Navigation Buttons */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-brand-border">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 pt-1 border-b border-brand-border -mx-1 px-1">
             {[
               { id: 'summary', label: '1. Project Summary' },
               { id: 'flowchart', label: '2. Flowchart' },
@@ -941,7 +941,7 @@ export const NewAnalysis: React.FC = () => {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition ${
+                className={`px-3.5 sm:px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition flex-shrink-0 ${
                   activeTab === tab.id
                     ? 'bg-brand-primary text-white shadow-sm'
                     : 'bg-white text-stone-700 hover:bg-brand-bg border border-brand-border'

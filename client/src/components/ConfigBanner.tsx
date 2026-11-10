@@ -27,10 +27,10 @@ export const ConfigBanner: React.FC = () => {
 
   return (
     <>
-      <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-xs text-amber-900 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-          <span>
+      <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="flex items-start sm:items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5 sm:mt-0" />
+          <span className="leading-relaxed">
             <strong>Configuration Action Required:</strong>{' '}
             {needsSupabase && needsGemini
               ? 'Supabase credentials and Google Gemini API key are pending configuration.'
@@ -40,7 +40,7 @@ export const ConfigBanner: React.FC = () => {
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 self-end sm:self-auto flex-shrink-0">
           <button
             type="button"
             onClick={() => setShowModal(true)}
@@ -61,7 +61,7 @@ export const ConfigBanner: React.FC = () => {
       {/* Setup Guide Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-brand-border">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6 shadow-2xl border border-brand-border">
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <h3 className="text-base font-semibold text-brand-dark">Er.NEXA Environment Configuration</h3>
               <button

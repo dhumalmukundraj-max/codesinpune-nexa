@@ -340,7 +340,7 @@ export const LaunchAssistantWindow: React.FC = () => {
   ];
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#141210]/95 text-stone-200 select-none overflow-hidden rounded-2xl border border-stone-800 shadow-2xl backdrop-blur-2xl">
+    <div className="h-screen w-screen flex flex-col bg-[#141210]/95 text-stone-200 select-none overflow-hidden sm:rounded-2xl sm:border border-stone-800 shadow-2xl backdrop-blur-2xl">
       {/* Hidden web file input for browser fallback */}
       <input
         ref={webFileInputRef}

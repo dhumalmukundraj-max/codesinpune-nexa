@@ -26,15 +26,15 @@ export const ReviewsList: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
       <div>
-        <h1 className="text-2xl font-black text-brand-dark tracking-tight">Reviews & Handover Reports</h1>
+        <h1 className="text-xl sm:text-2xl font-black text-brand-dark tracking-tight">Reviews & Handover Reports</h1>
         <p className="text-xs text-brand-muted mt-1">
           Authorized human verification and knowledge handover approvals for engineering teams.
         </p>
       </div>
 
-      <div className="bg-white rounded-3xl border border-brand-border p-6 shadow-sm">
+      <div className="bg-white rounded-2xl sm:rounded-3xl border border-brand-border p-4 sm:p-6 shadow-sm">
         <div className="flex items-center gap-2 pb-3 mb-6 border-b border-brand-border">
           <ShieldCheck className="w-5 h-5 text-brand-primary" />
           <h2 className="text-base font-bold text-brand-dark">Handover Review Dashboard</h2>
@@ -51,24 +51,24 @@ export const ReviewsList: React.FC = () => {
             {projects.map((proj) => (
               <div
                 key={proj.id}
-                className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
               >
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-bold text-brand-dark">{proj.name}</h3>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-brand-bg text-brand-dark font-medium border border-brand-border">
                       {proj.completion_percentage}% Complete
                     </span>
                   </div>
-                  <p className="text-xs text-stone-500 mt-1 line-clamp-1">
+                  <p className="text-xs text-stone-500 mt-1 line-clamp-2 sm:line-clamp-1">
                     {proj.description || 'AI-reconstructed codebase knowledge base.'}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 self-stretch sm:self-auto justify-between sm:justify-start pt-1 sm:pt-0">
                   <Link
                     to={`/projects/${proj.id}`}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white border border-brand-border text-brand-dark text-xs font-semibold hover:bg-brand-bg transition"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-white border border-brand-border text-brand-dark text-xs font-semibold hover:bg-brand-bg transition active:scale-95"
                   >
                     <ClipboardCheck className="w-4 h-4 text-emerald-600" />
                     <span>Review & Sign Handover</span>
@@ -77,7 +77,7 @@ export const ReviewsList: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleLaunchAssistant(proj)}
-                    className="p-2 rounded-xl bg-stone-900 text-stone-100 hover:bg-black transition"
+                    className="p-2 sm:p-2 rounded-xl bg-stone-900 text-stone-100 hover:bg-black transition active:scale-95 flex-shrink-0"
                     title="Launch Desktop Assistant"
                   >
                     <Layers className="w-4 h-4 text-brand-secondary" />
