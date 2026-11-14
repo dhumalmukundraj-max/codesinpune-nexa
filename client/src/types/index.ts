@@ -139,3 +139,149 @@ export interface ProjectPermission {
   created_at: string;
 }
 
+// ==========================================
+// ROUND 3: Continuous Sync, Knowledge Graph & Roadmap
+// ==========================================
+
+export interface GitHubSyncConfig {
+  id?: string;
+  project_id: string;
+  repo_owner: string;
+  repo_name: string;
+  repo_url: string;
+  default_branch: string;
+  github_token?: string;
+  has_token?: boolean;
+  webhook_secret?: string;
+  sync_interval: 'disabled' | '30m' | '1h' | '6h' | '24h';
+  last_synced_at?: string;
+  last_commit_sha?: string;
+  status: 'connected' | 'disconnected' | 'syncing' | 'error';
+  error_message?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface GitHubSyncHistoryItem {
+  id: string;
+  project_id: string;
+  trigger_type: 'manual' | 'webhook' | 'scheduled' | 'initial';
+  commit_sha?: string;
+  commit_message?: string;
+  commit_author?: string;
+  commits_count: number;
+  files_changed_count: number;
+  changed_files: Array<{
+    filename: string;
+    status: 'added' | 'modified' | 'deleted' | 'renamed';
+    additions?: number;
+    deletions?: number;
+  }>;
+  status: 'completed' | 'failed' | 'in_progress';
+  error_message?: string;
+  created_at: string;
+}
+
+export type KnowledgeNodeType =
+  | 'project'
+  | 'frontend_component'
+  | 'backend_module'
+  | 'source_file'
+  | 'function_class'
+  | 'api_endpoint'
+  | 'database_table'
+  | 'external_dependency'
+  | 'ai_service'
+  | 'architectural_decision';
+
+export type KnowledgeRelationshipType =
+  | 'imports'
+  | 'exports'
+  | 'calls'
+  | 'depends_on'
+  | 'connects_to'
+  | 'reads_from'
+  | 'writes_to'
+  | 'uses_api'
+  | 'implements'
+  | 'belongs_to'
+  | 'architectural_relationship';
+
+export interface KnowledgeGraphNode {
+  id: string;
+  project_id: string;
+  label: string;
+  node_type: KnowledgeNodeType;
+  file_path?: string;
+  line_number?: number;
+  description?: string;
+  evidence_type?: 'verified_code' | 'ai_inferred' | 'architectural_spec';
+  confidence?: number;
+  metadata?: Record<string, any>;
+  position?: { x: number; y: number };
+  [key: string]: any;
+}
+
+export interface KnowledgeGraphEdge {
+  id: string;
+  project_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  relationship_type: KnowledgeRelationshipType;
+  label?: string;
+  evidence?: string;
+  evidence_file?: string;
+  evidence_line?: number;
+  extraction_method?: 'static_analysis' | 'ai_inference' | 'architectural_flow';
+  confidence?: number;
+}
+
+export interface KnowledgeGraphData {
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+  metadata?: {
+    nodeCounts?: Record<string, number>;
+    totalNodes?: number;
+    totalEdges?: number;
+  };
+}
+
+export interface ProjectTask {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  reason: string;
+  gap_type:
+    | 'incomplete_functionality'
+    | 'unfinished_task'
+    | 'missing_validation'
+    | 'missing_test'
+    | 'documentation_gap'
+    | 'technical_debt';
+  phase: 'Phase 1: Critical Stabilization' | 'Phase 2: Core Enhancement' | 'Phase 3: Integration & Quality' | 'Phase 4: Optimization & Scale';
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  priority_reason?: string;
+  complexity: 'low' | 'medium' | 'high';
+  dependencies: string[];
+  suggested_owner: string;
+  owner_reasoning?: string;
+  implementation_steps: string[];
+  expected_outcome: string;
+  source_file_references: string[];
+  supporting_evidence?: string;
+  evidence_type: 'verified_code' | 'ai_inferred';
+  status: 'suggested' | 'pending' | 'in_progress' | 'completed' | 'rejected';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface RoadmapPhaseGroup {
+  name: string;
+  tasks: ProjectTask[];
+  completedCount: number;
+  totalCount: number;
+  progressPercentage: number;
+}
+
+

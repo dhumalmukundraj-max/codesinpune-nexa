@@ -1,0 +1,60 @@
+[
+  {
+    "id": "env-config-example",
+    "project_id": "dad2717d-99c3-40a7-a3ae-32f9ceaf2b22",
+    "phase_id": "phase-1",
+    "phase_name": "Phase 1: Critical Implementations & Core Fixes",
+    "title": "Create `.env.example` for environment variable configuration",
+    "description": "A `.env.example` file is missing from the project, making it difficult for new developers or users to understand and configure the necessary environment variables for project setup and execution.",
+    "reason": "Without a `.env.example` file, anyone attempting to set up or run the project must infer the required environment variables, which can lead to setup errors, increased onboarding time, and inconsistent configurations across different environments. This is a fundamental developer experience and project setup issue.",
+    "evidence": "No .env.example found: Environment variable configuration requirements must be inferred.",
+    "source_file_refs": [],
+    "priority": "critical",
+    "priority_rationale": "This is a critical blocker for project setup and developer onboarding. Without clear environment variable guidance, the project is difficult to run or contribute to, directly impacting its usability and maintainability from a developer perspective.",
+    "estimated_complexity": "medium",
+    "dependencies": [],
+    "suggested_owner": "Owner not determined",
+    "status": "pending",
+    "implementation_steps": [
+      "Perform a codebase scan to identify all environment variables used (e.g., `process.env.DB_HOST`, `process.env.PORT`).",
+      "Create a new file named `.env.example` in the project root directory.",
+      "Document each identified environment variable in `.env.example` with a brief description and an appropriate example value (e.g., `DB_HOST=localhost`, `PORT=3000`).",
+      "Add a note in `README.md` instructing users to copy `.env.example` to `.env` and configure it."
+    ],
+    "expected_outcome": "A comprehensive `.env.example` file is present, detailing all required environment variables, enabling easy project setup for new users and contributors.",
+    "gap_type": "documentation_gap",
+    "evidence_verification": "verified_issue",
+    "updated_at": "2026-11-14T18:45:35.440Z",
+    "created_at": "2026-11-14T18:45:35.440Z"
+  },
+  {
+    "id": "doc-fix-alter-table-rename",
+    "project_id": "dad2717d-99c3-40a7-a3ae-32f9ceaf2b22",
+    "phase_id": "phase-4",
+    "phase_name": "Phase 4: Optimization, Documentation & Handover",
+    "title": "Complete `ALTER TABLE RENAME COLUMN` example in `README.md`",
+    "description": "The SQL example for `ALTER TABLE RENAME COLUMN` in the `README.md` file is currently incomplete, making it unhelpful and potentially confusing for users learning SQL.",
+    "reason": "The current example for `ALTER TABLE RENAME COLUMN` in `README.md` is cut off mid-statement, rendering it syntactically incorrect and failing to provide a clear, working illustration of the command. This directly hinders the project's goal of teaching SQL effectively.",
+    "evidence": "The example for `ALTER TABLE RENAME COLUMN` in `README.md` is incomplete, cutting off mid-statement.",
+    "source_file_refs": [
+      "README.md"
+    ],
+    "priority": "high",
+    "priority_rationale": "Accurate and complete documentation is critical for a learning project. An incomplete example is misleading and can frustrate users, undermining the project's educational value. Fixing this improves the core utility of the project.",
+    "estimated_complexity": "small",
+    "dependencies": [],
+    "suggested_owner": "Owner not determined",
+    "status": "pending",
+    "implementation_steps": [
+      "Locate the `ALTER TABLE RENAME COLUMN` section in `README.md`.",
+      "Identify the incomplete SQL statement.",
+      "Complete the SQL statement to a valid and illustrative example (e.g., `ALTER TABLE Customers RENAME COLUMN ContactName TO FullName;`).",
+      "Review the updated `README.md` for correctness and clarity."
+    ],
+    "expected_outcome": "The `README.md` contains a complete, syntactically correct, and easy-to-understand example for `ALTER TABLE RENAME COLUMN`.",
+    "gap_type": "documentation_gap",
+    "evidence_verification": "verified_issue",
+    "updated_at": "2026-11-14T18:45:35.440Z",
+    "created_at": "2026-11-14T18:45:35.440Z"
+  }
+]

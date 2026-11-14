@@ -258,3 +258,174 @@ export async function fetchAssistantContext(projectId: string, assistantToken?: 
   return res.json();
 }
 
+// ==========================================
+// ROUND 3 API: GitHub Continuous Sync
+// ==========================================
+
+export async function fetchSyncConfig(projectId: string) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/sync/config`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to fetch GitHub sync configuration');
+  }
+  return res.json();
+}
+
+export async function connectGitHubRepo(
+  projectId: string,
+  payload: { repoUrl: string; githubToken?: string; syncInterval?: string; webhookSecret?: string }
+) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/sync/connect`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to connect repository');
+  }
+  return res.json();
+}
+
+export async function disconnectGitHubRepo(projectId: string) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/sync/disconnect`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to disconnect repository');
+  }
+  return res.json();
+}
+
+export async function triggerManualSync(projectId: string) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/sync/manual`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Sync execution failed');
+  }
+  return res.json();
+}
+
+export async function fetchSyncHistory(projectId: string, limit = 20) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/sync/history?limit=${limit}`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load sync history');
+  }
+  return res.json();
+}
+
+export async function updateSyncInterval(projectId: string, interval: string) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/sync/interval`, {
+    method: 'PATCH',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ interval }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update sync interval');
+  }
+  return res.json();
+}
+
+// ==========================================
+// ROUND 3 API: Interactive Knowledge Graph
+// ==========================================
+
+export async function fetchKnowledgeGraph(projectId: string) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/graph`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load project knowledge graph');
+  }
+  return res.json();
+}
+
+export async function generateKnowledgeGraph(projectId: string) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/graph/generate`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to generate project knowledge graph');
+  }
+  return res.json();
+}
+
+// ==========================================
+// ROUND 3 API: Intelligent Roadmap & Tasks
+// ==========================================
+
+export async function fetchProjectTasks(projectId: string) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/tasks`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load roadmap tasks');
+  }
+  return res.json();
+}
+
+export async function generateProjectTasks(projectId: string) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/tasks/generate`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to generate AI task recommendations');
+  }
+  return res.json();
+}
+
+export async function updateProjectTask(projectId: string, taskId: string, updates: any) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}`, {
+    method: 'PATCH',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update task');
+  }
+  return res.json();
+}
+
+export async function deleteProjectTask(projectId: string, taskId: string) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}`, {
+    method: 'DELETE',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete task');
+  }
+  return res.json();
+}
+
+

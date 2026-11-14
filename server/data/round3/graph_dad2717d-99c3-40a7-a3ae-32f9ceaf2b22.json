@@ -1,0 +1,106 @@
+{
+  "nodes": [
+    {
+      "id": "proj-dad2717d",
+      "project_id": "dad2717d-99c3-40a7-a3ae-32f9ceaf2b22",
+      "label": "SQL-Learning",
+      "node_type": "project",
+      "description": "This project serves as a comprehensive personal knowledge base, documenting core SQL concepts, definitions of database components (Data, Database, DBMS), types of databases, SQL clauses, CRUD operations, data types, keys, and practical SQL query examples for table and data manipulation. It is a static collection of notes, primarily intended for self-reference and learning, not an executable software application.",
+      "evidence_type": "verified_code",
+      "confidence": 1,
+      "position_x": 120,
+      "position_y": 60,
+      "metadata": {
+        "languages": [
+          "TypeScript"
+        ],
+        "frameworks": [],
+        "completionPercentage": 100
+      }
+    },
+    {
+      "id": "file-UkVBRE1FLm1k",
+      "project_id": "dad2717d-99c3-40a7-a3ae-32f9ceaf2b22",
+      "label": "README.md",
+      "node_type": "source_file",
+      "file_path": "README.md",
+      "description": "SOURCE FILE (Markdown)",
+      "evidence_type": "verified_code",
+      "confidence": 0.98,
+      "metadata": {
+        "size": 22643,
+        "language": "Markdown"
+      },
+      "position_x": 120,
+      "position_y": 1260
+    },
+    {
+      "id": "arch-dec-0",
+      "project_id": "dad2717d-99c3-40a7-a3ae-32f9ceaf2b22",
+      "label": "Project Type",
+      "node_type": "architectural_decision",
+      "description": "The project is a static documentation/learning journal, not an executable software application.",
+      "evidence_type": "ai_inferred",
+      "confidence": 0.75,
+      "metadata": {
+        "status": "inferred",
+        "topic": "Project Type"
+      },
+      "position_x": 120,
+      "position_y": 160
+    },
+    {
+      "id": "arch-dec-1",
+      "project_id": "dad2717d-99c3-40a7-a3ae-32f9ceaf2b22",
+      "label": "Content Focus",
+      "node_type": "architectural_decision",
+      "description": "Focus on fundamental SQL concepts, DDL, and DML operations, structured chronologically by learning days.",
+      "evidence_type": "verified_code",
+      "confidence": 0.95,
+      "metadata": {
+        "status": "verified",
+        "topic": "Content Focus"
+      },
+      "position_x": 380,
+      "position_y": 160
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-proj-dad2717d-file-UkVBRE1FLm1k",
+      "project_id": "dad2717d-99c3-40a7-a3ae-32f9ceaf2b22",
+      "source_node_id": "proj-dad2717d",
+      "target_node_id": "file-UkVBRE1FLm1k",
+      "relationship_type": "belongs_to",
+      "label": "contains",
+      "extraction_method": "static_analysis",
+      "evidence": "Discovered in project repository at README.md",
+      "confidence": 1
+    },
+    {
+      "id": "edge-arch-dec-0-rel-file-UkVBRE1FLm1k",
+      "project_id": "dad2717d-99c3-40a7-a3ae-32f9ceaf2b22",
+      "source_node_id": "arch-dec-0",
+      "target_node_id": "file-UkVBRE1FLm1k",
+      "relationship_type": "architectural_relationship",
+      "label": "governs",
+      "evidence": "Decision grounded in evidence file README.md",
+      "evidence_file": "README.md",
+      "extraction_method": "ai_inferred",
+      "confidence": 0.85
+    },
+    {
+      "id": "edge-arch-dec-1-rel-file-UkVBRE1FLm1k",
+      "project_id": "dad2717d-99c3-40a7-a3ae-32f9ceaf2b22",
+      "source_node_id": "arch-dec-1",
+      "target_node_id": "file-UkVBRE1FLm1k",
+      "relationship_type": "architectural_relationship",
+      "label": "governs",
+      "evidence": "Decision grounded in evidence file README.md",
+      "evidence_file": "README.md",
+      "extraction_method": "ai_inferred",
+      "confidence": 0.85
+    }
+  ],
+  "lastUpdated": "2026-11-14T18:43:32.967Z"
+}

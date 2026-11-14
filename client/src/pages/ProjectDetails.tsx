@@ -16,7 +16,11 @@ import {
   EyeOff,
   ShieldAlert,
   ShieldCheck,
-  KeyRound
+  KeyRound,
+  GitBranch,
+  Network,
+  ListChecks,
+  Sparkles
 } from 'lucide-react';
 import { fetchProjectDetails, deleteProject, submitProjectReview, launchAssistantWindow, unlockProject } from '../lib/api';
 import { SummaryTab } from '../components/analysis/SummaryTab';
@@ -25,6 +29,9 @@ import { RoadmapTab } from '../components/analysis/RoadmapTab';
 import { ProgressTab } from '../components/analysis/ProgressTab';
 import { PasswordPromptModal } from '../components/PasswordPromptModal';
 import { ShareProjectModal } from '../components/ShareProjectModal';
+import { GitHubSyncSection } from '../components/sync/GitHubSyncSection';
+import { KnowledgeGraphViewer } from '../components/graph/KnowledgeGraphViewer';
+import { IntelligentRoadmapSection } from '../components/roadmap/IntelligentRoadmapSection';
 
 export const ProjectDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -35,7 +42,7 @@ export const ProjectDetails: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'summary' | 'flowchart' | 'block' | 'roadmap' | 'progress'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'graph' | 'roadmap' | 'sync' | 'flowchart' | 'block' | 'progress'>('summary');
 
   // Password unlock state
   const [passwordInput, setPasswordInput] = useState<string>('');
@@ -316,6 +323,16 @@ export const ProjectDetails: React.FC = () => {
                 <span>Launch Assistant</span>
               </button>
 
+              {/* GitHub Continuous Sync Shortcut */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('sync')}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-stone-300 text-stone-800 text-xs font-semibold hover:bg-stone-50 transition active:scale-95"
+              >
+                <GitBranch className="w-4 h-4 text-[#C1121F]" />
+                <span>GitHub Sync</span>
+              </button>
+
               {/* Review / Handover */}
               {canReview && (
                 <button
@@ -391,63 +408,97 @@ export const ProjectDetails: React.FC = () => {
         </div>
       )}
 
-      {/* 5 Tab Navigation Buttons */}
-      {analysis && !isLocked && (
+      {/* 7 Tab Navigation Buttons */}
+      {!isLocked && project && (
         <div className="space-y-6">
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 pt-1 border-b border-brand-border -mx-1 px-1">
             {[
               { id: 'summary', label: '1. Project Summary' },
-              { id: 'flowchart', label: '2. Flowchart' },
-              { id: 'block', label: '3. Block Diagram' },
-              { id: 'roadmap', label: '4. Development Roadmap' },
-              { id: 'progress', label: '5. Project Progress' },
+              { id: 'graph', label: '2. Knowledge Graph', badge: 'Interactive' },
+              { id: 'roadmap', label: '3. Roadmap & Tasks', badge: 'AI Gaps' },
+              { id: 'sync', label: '4. GitHub Continuous Sync', badge: 'Live' },
+              { id: 'flowchart', label: '5. Flowchart' },
+              { id: 'block', label: '6. Block Diagram' },
+              { id: 'progress', label: '7. Project Progress' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-3.5 sm:px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition flex-shrink-0 ${
+                className={`px-3.5 sm:px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition flex-shrink-0 flex items-center gap-1.5 ${
                   activeTab === tab.id
                     ? 'bg-brand-primary text-white shadow-sm'
                     : 'bg-white text-stone-700 hover:bg-brand-bg border border-brand-border'
                 }`}
               >
-                {tab.label}
+                <span>{tab.label}</span>
+                {'badge' in tab && tab.badge && (
+                  <span
+                    className={`text-[9px] px-1.5 py-0.2 rounded-full uppercase tracking-wider font-extrabold ${
+                      activeTab === tab.id
+                        ? 'bg-white/20 text-white'
+                        : 'bg-amber-100 text-amber-900 border border-amber-200'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
           {/* Tab 1: Summary */}
           {activeTab === 'summary' && (
-            <SummaryTab summary={analysis.summary} />
+            analysis?.summary ? (
+              <SummaryTab summary={analysis.summary} />
+            ) : (
+              <div className="p-8 text-center text-stone-500 bg-white rounded-2xl border border-brand-border">
+                Project summary is being generated or repository was imported. Check GitHub Sync to trigger analysis.
+              </div>
+            )
           )}
 
-          {/* Tab 2: Flowchart */}
+          {/* Tab 2: Interactive Knowledge Graph */}
+          {activeTab === 'graph' && (
+            <KnowledgeGraphViewer projectId={project.id} projectName={project.name} />
+          )}
+
+          {/* Tab 3: Intelligent Roadmap & Tasks */}
+          {activeTab === 'roadmap' && (
+            <IntelligentRoadmapSection projectId={project.id} projectName={project.name} />
+          )}
+
+          {/* Tab 4: Continuous GitHub Sync */}
+          {activeTab === 'sync' && (
+            <GitHubSyncSection
+              projectId={project.id}
+              projectName={project.name}
+              sourceType={project.source_type}
+              repositoryUrl={project.repository_url}
+            />
+          )}
+
+          {/* Tab 5: Flowchart */}
           {activeTab === 'flowchart' && (
             <MermaidViewer
               id="flowchart-viewer"
               title="Project Workflow Flowchart"
-              chart={analysis.flowchart_mermaid || analysis.flowchartMermaid || ''}
+              chart={analysis?.flowchart_mermaid || analysis?.flowchartMermaid || ''}
             />
           )}
 
-          {/* Tab 3: Block Diagram */}
+          {/* Tab 6: Block Diagram */}
           {activeTab === 'block' && (
             <MermaidViewer
               id="block-viewer"
               title="System Architecture Block Diagram"
-              chart={analysis.block_diagram_mermaid || analysis.blockDiagramMermaid || ''}
+              chart={analysis?.block_diagram_mermaid || analysis?.blockDiagramMermaid || ''}
             />
           )}
 
-          {/* Tab 4: Roadmap */}
-          {activeTab === 'roadmap' && (
-            <RoadmapTab roadmap={analysis.roadmap} />
-          )}
-
-          {/* Tab 5: Progress */}
+          {/* Tab 7: Progress */}
           {activeTab === 'progress' && (
-            <ProgressTab metrics={analysis.progress_metrics || analysis.progressMetrics} summary={analysis.summary} />
+            <ProgressTab metrics={analysis?.progress_metrics || analysis?.progressMetrics} summary={analysis?.summary} />
           )}
         </div>
       )}
