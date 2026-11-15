@@ -73,11 +73,15 @@ CREATE TABLE IF NOT EXISTS public.conversation_participants (
   UNIQUE(conversation_id, user_id)
 );
 
--- Ensure existing conversation_participants table has role column
+-- Ensure existing conversation_participants table has role and last_read_at columns
 DO $$
 BEGIN
   BEGIN
     ALTER TABLE public.conversation_participants ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member';
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE public.conversation_participants ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ DEFAULT NOW();
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 END $$;
@@ -188,15 +192,20 @@ CREATE POLICY "Users can leave or admins can remove participants" ON public.conv
     )
   );
 
+CREATE INDEX IF NOT EXISTS idx_conv_participants_user_read ON public.conversation_participants(user_id, conversation_id, last_read_at);
+
 DROP POLICY IF EXISTS "Admins can update participant roles" ON public.conversation_participants;
-CREATE POLICY "Admins can update participant roles" ON public.conversation_participants
+DROP POLICY IF EXISTS "Users can update their own participant record or admins can update" ON public.conversation_participants;
+CREATE POLICY "Users can update their own participant record or admins can update" ON public.conversation_participants
   FOR UPDATE USING (
-    public.is_conversation_participant(conversation_id, auth.uid()) AND
-    EXISTS (
-      SELECT 1 FROM public.conversation_participants cp
-      WHERE cp.conversation_id = conversation_participants.conversation_id
-        AND cp.user_id = auth.uid()
-        AND cp.role = 'admin'
+    user_id = auth.uid() OR (
+      public.is_conversation_participant(conversation_id, auth.uid()) AND
+      EXISTS (
+        SELECT 1 FROM public.conversation_participants cp
+        WHERE cp.conversation_id = conversation_participants.conversation_id
+          AND cp.user_id = auth.uid()
+          AND cp.role = 'admin'
+      )
     )
   );
 

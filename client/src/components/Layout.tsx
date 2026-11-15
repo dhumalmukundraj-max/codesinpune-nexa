@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { ConfigBanner } from './ConfigBanner';
-import { Menu, Layers, Cpu } from 'lucide-react';
+import { Menu, Layers, Cpu, MessageSquare } from 'lucide-react';
 import { launchAssistantWindow } from '../lib/api';
+import { useMessageNotifications } from '../context/MessageNotificationContext';
 
 export const Layout: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { unreadTotalCount } = useMessageNotifications();
   const location = useLocation();
 
   // Close mobile drawer on route changes
@@ -36,6 +38,18 @@ export const Layout: React.FC = () => {
           </Link>
 
           <div className="flex items-center gap-2">
+            <Link
+              to="/messages"
+              title="Messages"
+              className="relative p-2 rounded-xl border border-brand-border hover:bg-brand-bg text-brand-dark transition active:scale-95"
+            >
+              <MessageSquare className="w-5 h-5 text-stone-700" />
+              {unreadTotalCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#C1121F] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs animate-pulse">
+                  {unreadTotalCount > 99 ? '99+' : unreadTotalCount}
+                </span>
+              )}
+            </Link>
             <button
               type="button"
               onClick={() => launchAssistantWindow('')}

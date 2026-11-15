@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   MessageSquare, 
   Send, 
@@ -26,7 +26,8 @@ import {
   Camera,
   Info,
   Trash2,
-  Check
+  Check,
+  Bell
 } from 'lucide-react';
 import { 
   fetchConversations, 
@@ -44,6 +45,7 @@ import {
 } from '../lib/api';
 import { ConversationItem, ChatMessage, UserProfile, MessageAttachment, GroupMemberInfo } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useMessageNotifications } from '../context/MessageNotificationContext';
 import { supabase } from '../lib/supabase';
 
 function formatFileSize(bytes: number): string {
@@ -78,7 +80,9 @@ function getDocumentColor(ext: string): { bg: string; text: string; border: stri
 
 export const MessengerPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const { markAsRead, setActiveOpenConversationId, refreshUnreadCounts } = useMessageNotifications();
 
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -143,6 +147,28 @@ export const MessengerPage: React.FC = () => {
     loadMyProfile();
     loadConversations();
   }, []);
+
+  // Keep global message notification context updated with currently active conversation
+  useEffect(() => {
+    setActiveOpenConversationId(activeConversationId);
+    if (activeConversationId) {
+      markAsRead(activeConversationId);
+    }
+    return () => {
+      setActiveOpenConversationId(null);
+    };
+  }, [activeConversationId, setActiveOpenConversationId, markAsRead]);
+
+  // Open conversation specified in query parameters (e.g. from in-app notification click)
+  useEffect(() => {
+    const targetConvId = searchParams.get('conversationId') || searchParams.get('id');
+    if (targetConvId && conversations.length > 0) {
+      const match = conversations.find((c) => c.id === targetConvId);
+      if (match && activeConversationId !== targetConvId) {
+        handleSelectConversation(targetConvId);
+      }
+    }
+  }, [searchParams, conversations, activeConversationId]);
 
   // Browser Back Button (popstate) handling
   useEffect(() => {
@@ -372,10 +398,14 @@ export const MessengerPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [addMemberSearchQuery, activeConversationDetail]);
 
-  // Open a conversation with browser history support
+  // Open a conversation with browser history support & auto mark as read
   const handleSelectConversation = (convId: string) => {
     setActiveConversationId(convId);
     setShowMobileChat(true);
+    markAsRead(convId);
+    setConversations((prev) =>
+      prev.map((c) => (c.id === convId ? { ...c, unreadCount: 0 } : c))
+    );
     try {
       window.history.pushState({ chatActive: true, convId }, '', window.location.href);
     } catch {}
@@ -770,13 +800,17 @@ export const MessengerPage: React.FC = () => {
                   ? conv.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${conv.id}`
                   : conv.otherParticipant?.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${conv.otherParticipant?.id || 'guest'}`;
 
+                const hasUnread = (conv.unreadCount || 0) > 0;
+
                 return (
                   <div
                     key={conv.id}
                     onClick={() => handleSelectConversation(conv.id)}
-                    className={`p-3 rounded-2xl cursor-pointer transition flex items-center gap-3 ${
+                    className={`p-3 rounded-2xl cursor-pointer transition flex items-center gap-3 relative ${
                       isSelected
-                        ? 'bg-white shadow-sm border border-stone-200 ring-2 ring-[#C1121F]/10'
+                        ? 'bg-white shadow-sm border border-stone-200 ring-2 ring-[#C1121F]/15'
+                        : hasUnread
+                        ? 'bg-red-50/50 hover:bg-red-50/80 border-l-4 border-l-[#C1121F] shadow-2xs'
                         : 'hover:bg-white/70'
                     }`}
                   >
@@ -784,18 +818,18 @@ export const MessengerPage: React.FC = () => {
                       <img
                         src={avatar}
                         alt={title}
-                        className={`w-11 h-11 object-cover border border-stone-200 ${
-                          isGroupConv ? 'rounded-2xl' : 'rounded-full'
-                        }`}
+                        className={`w-11 h-11 object-cover border ${
+                          hasUnread ? 'border-[#C1121F]/40 ring-2 ring-[#C1121F]/20' : 'border-stone-200'
+                        } ${isGroupConv ? 'rounded-2xl' : 'rounded-full'}`}
                       />
                       {isGroupConv && (
                         <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-stone-800 text-white rounded-full flex items-center justify-center border border-white">
                           <Users className="w-2.5 h-2.5" />
                         </span>
                       )}
-                      {conv.unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#C1121F] text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-sm">
-                          {conv.unreadCount}
+                      {hasUnread && (
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#C1121F] text-white text-[10px] font-extrabold rounded-full flex items-center justify-center shadow-xs animate-pulse">
+                          {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
                         </span>
                       )}
                     </div>
@@ -803,22 +837,29 @@ export const MessengerPage: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <p className="text-xs font-bold text-stone-900 truncate">{title}</p>
+                          <p className={`text-xs truncate ${hasUnread ? 'font-black text-stone-950' : 'font-bold text-stone-900'}`}>
+                            {title}
+                          </p>
                           {isGroupConv && (
                             <span className="text-[9px] px-1.5 py-0.2 bg-red-50 text-[#C1121F] font-bold rounded shrink-0 border border-red-100">
                               Group
                             </span>
                           )}
+                          {hasUnread && !isSelected && (
+                            <span className="text-[9px] px-1.5 py-0.2 bg-[#C1121F] text-white font-extrabold rounded-full shrink-0">
+                              NEW
+                            </span>
+                          )}
                         </div>
-                        <span className="text-[10px] text-stone-400 font-mono shrink-0">
+                        <span className={`text-[10px] font-mono shrink-0 ${hasUnread ? 'text-[#C1121F] font-bold' : 'text-stone-400'}`}>
                           {conv.lastMessage?.created_at
                             ? new Date(conv.lastMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                             : ''}
                         </span>
                       </div>
-                      <p className="text-[11px] text-stone-500 truncate mt-0.5 flex items-center gap-1">
-                        {conv.lastMessage?.message_type === 'image' && <ImageIcon className="w-3 h-3 shrink-0 text-stone-400" />}
-                        {conv.lastMessage?.message_type === 'document' && <FileIcon className="w-3 h-3 shrink-0 text-stone-400" />}
+                      <p className={`text-[11px] truncate mt-0.5 flex items-center gap-1 ${hasUnread ? 'font-semibold text-stone-800' : 'text-stone-500'}`}>
+                        {conv.lastMessage?.message_type === 'image' && <ImageIcon className={`w-3 h-3 shrink-0 ${hasUnread ? 'text-[#C1121F]' : 'text-stone-400'}`} />}
+                        {conv.lastMessage?.message_type === 'document' && <FileIcon className={`w-3 h-3 shrink-0 ${hasUnread ? 'text-[#C1121F]' : 'text-stone-400'}`} />}
                         <span>{conv.lastMessage?.content || 'Shared attachment'}</span>
                       </p>
                     </div>

@@ -13,6 +13,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useMessageNotifications } from '../context/MessageNotificationContext';
 import { launchAssistantWindow } from '../lib/api';
 
 interface SidebarProps {
@@ -22,6 +23,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
   const { user, logout } = useAuth();
+  const { unreadTotalCount } = useMessageNotifications();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -96,8 +98,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                 }`
               }
             >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              <span>{item.label}</span>
+              {({ isActive }) => (
+                <>
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="flex-1">{item.label}</span>
+                  {item.to === '/messages' && unreadTotalCount > 0 && (
+                    <span
+                      className={`px-2 py-0.5 text-xs font-bold rounded-full shadow-xs transition-transform ${
+                        isActive
+                          ? 'bg-white text-brand-primary ring-1 ring-white/20'
+                          : 'bg-[#C1121F] text-white animate-pulse'
+                      }`}
+                    >
+                      {unreadTotalCount > 99 ? '99+' : unreadTotalCount}
+                    </span>
+                  )}
+                </>
+              )}
             </NavLink>
           );
         })}

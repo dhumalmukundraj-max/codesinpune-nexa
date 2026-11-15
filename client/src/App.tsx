@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { MessageNotificationProvider } from './context/MessageNotificationContext';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { NewAnalysis } from './pages/NewAnalysis';
@@ -36,34 +37,36 @@ export const App: React.FC = () => {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          {/* Standalone Desktop Companion / Assistant Route (No App Shell Layout) */}
-          <Route path="/assistant" element={<LaunchAssistantWindow />} />
+        <MessageNotificationProvider>
+          <Routes>
+            {/* Standalone Desktop Companion / Assistant Route (No App Shell Layout) */}
+            <Route path="/assistant" element={<LaunchAssistantWindow />} />
 
-          {/* Auth Routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+            {/* Auth Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
 
-          {/* Main App Layout */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/new-analysis" element={<NewAnalysis />} />
-            <Route path="/projects" element={<ProjectsList />} />
-            <Route path="/projects/:id" element={<ProjectDetails />} />
-            <Route path="/reviews" element={<ReviewsList />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/messages" element={<MessengerPage />} />
-          </Route>
+            {/* Main App Layout */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/new-analysis" element={<NewAnalysis />} />
+              <Route path="/projects" element={<ProjectsList />} />
+              <Route path="/projects/:id" element={<ProjectDetails />} />
+              <Route path="/reviews" element={<ReviewsList />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/messages" element={<MessengerPage />} />
+            </Route>
 
-          {/* Catch-all redirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            {/* Catch-all redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </MessageNotificationProvider>
       </BrowserRouter>
     </AuthProvider>
   );

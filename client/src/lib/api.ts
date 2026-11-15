@@ -590,6 +590,89 @@ export async function fetchPublicProfile(idOrUsername: string) {
 // Built-in Real-Time Messenger APIs
 // ==========================================
 
+export async function fetchUnreadMessageCounts(): Promise<{ totalUnread: number; byConversation: Record<string, number> }> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE}/messages/unread-count`, {
+      headers: { ...headers, 'Content-Type': 'application/json' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { totalUnread: data.totalUnread || 0, byConversation: data.byConversation || {} };
+    }
+  } catch (err) {
+    console.warn('[Er.NEXA api] fetchUnreadMessageCounts API fallback:', err);
+  }
+
+  // Supabase direct fallback
+  if (supabase) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: participants } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id, last_read_at')
+          .eq('user_id', user.id);
+
+        if (participants && participants.length > 0) {
+          const convIds = participants.map((p: any) => p.conversation_id);
+          const { data: messages } = await supabase
+            .from('messages')
+            .select('conversation_id, sender_id, created_at')
+            .in('conversation_id', convIds);
+
+          const byConversation: Record<string, number> = {};
+          let totalUnread = 0;
+
+          const readMap = new Map<string, string>();
+          participants.forEach((p: any) => {
+            if (p.last_read_at) readMap.set(p.conversation_id, p.last_read_at);
+          });
+
+          (messages || []).forEach((m: any) => {
+            if (m.sender_id !== user.id) {
+              const lastRead = readMap.get(m.conversation_id) || '1970-01-01';
+              if (new Date(m.created_at).getTime() > new Date(lastRead).getTime()) {
+                byConversation[m.conversation_id] = (byConversation[m.conversation_id] || 0) + 1;
+                totalUnread += 1;
+              }
+            }
+          });
+
+          return { totalUnread, byConversation };
+        }
+      }
+    } catch {}
+  }
+
+  return { totalUnread: 0, byConversation: {} };
+}
+
+export async function markConversationAsRead(conversationId: string): Promise<void> {
+  const headers = await getAuthHeaders();
+
+  // Call backend API
+  fetch(`${API_BASE}/messages/conversations/${conversationId}/read`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  }).catch(() => {});
+
+  // Update Supabase directly for instant persistence across devices
+  if (supabase) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('conversation_participants')
+          .update({ last_read_at: new Date().toISOString() })
+          .match({ conversation_id: conversationId, user_id: user.id });
+      }
+    } catch (err) {
+      console.warn('[Er.NEXA api] markConversationAsRead direct Supabase notice:', err);
+    }
+  }
+}
+
 export async function fetchConversations() {
   try {
     const headers = await getAuthHeaders();

@@ -853,11 +853,18 @@ export const messageStorage = {
       try {
         const { data: userParticipantRows, error: pErr } = await supabaseAdmin
           .from('conversation_participants')
-          .select('conversation_id, role')
+          .select('conversation_id, role, last_read_at')
           .eq('user_id', userId);
 
         if (!pErr && userParticipantRows && userParticipantRows.length > 0) {
           const convIds = userParticipantRows.map((r: any) => r.conversation_id);
+          const userReadMap = new Map<string, string>();
+          userParticipantRows.forEach((r: any) => {
+            if (r.last_read_at) {
+              userReadMap.set(r.conversation_id, r.last_read_at);
+              state.reads[`${r.conversation_id}:${userId}`] = r.last_read_at;
+            }
+          });
 
           // Discrete resilient query for conversations (no problematic nested foreign key embeds)
           const { data: convRows, error: cErr } = await supabaseAdmin
@@ -887,8 +894,8 @@ export const messageStorage = {
                 if (!latestMsgByConv.has(m.conversation_id)) {
                   latestMsgByConv.set(m.conversation_id, m);
                 }
-                const lastRead = state.reads[`${m.conversation_id}:${userId}`] || '1970-01-01';
-                if (m.sender_id !== userId && m.created_at > lastRead) {
+                const lastRead = userReadMap.get(m.conversation_id) || state.reads[`${m.conversation_id}:${userId}`] || '1970-01-01';
+                if (m.sender_id !== userId && new Date(m.created_at).getTime() > new Date(lastRead).getTime()) {
                   unreadByConv.set(m.conversation_id, (unreadByConv.get(m.conversation_id) || 0) + 1);
                 }
               }
@@ -1094,9 +1101,21 @@ export const messageStorage = {
       throw new Error('Access denied to this conversation.');
     }
 
-    // Mark as read
-    state.reads[`${conversationId}:${userId}`] = new Date().toISOString();
+    // Mark as read in local cache and Supabase Database
+    const nowIso = new Date().toISOString();
+    state.reads[`${conversationId}:${userId}`] = nowIso;
     writeLocalMessenger(state);
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin
+          .from('conversation_participants')
+          .update({ last_read_at: nowIso })
+          .match({ conversation_id: conversationId, user_id: userId });
+      } catch (err: any) {
+        console.warn('[Er.NEXA messageStorage] Supabase getMessages mark read warning:', err.message);
+      }
+    }
 
     let fetchedMessages: MessageRecord[] = [];
 
@@ -1494,5 +1513,51 @@ export const messageStorage = {
     }
 
     throw new Error('File content could not be located.');
+  },
+
+  /**
+   * Explicitly marks all messages in a conversation as read for a given user
+   */
+  async markConversationAsRead(
+    conversationId: string,
+    userId: string
+  ): Promise<{ success: boolean; read_at: string }> {
+    const now = new Date().toISOString();
+    const state = readLocalMessenger();
+    state.reads[`${conversationId}:${userId}`] = now;
+    writeLocalMessenger(state);
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin
+          .from('conversation_participants')
+          .update({ last_read_at: now })
+          .match({ conversation_id: conversationId, user_id: userId });
+      } catch (err: any) {
+        console.warn('[Er.NEXA messageStorage] Supabase markConversationAsRead warning:', err.message);
+      }
+    }
+
+    return { success: true, read_at: now };
+  },
+
+  /**
+   * Calculates unread messages across all conversations for a user
+   */
+  async getUnreadCounts(
+    userId: string
+  ): Promise<{ totalUnread: number; byConversation: Record<string, number> }> {
+    const convs = await this.getUserConversations(userId);
+    const byConversation: Record<string, number> = {};
+    let totalUnread = 0;
+
+    for (const c of convs) {
+      if (c.unreadCount > 0) {
+        byConversation[c.id] = c.unreadCount;
+        totalUnread += c.unreadCount;
+      }
+    }
+
+    return { totalUnread, byConversation };
   },
 };

@@ -51,6 +51,17 @@ router.get('/conversations', requireAuth, async (req: AuthenticatedRequest, res:
   }
 });
 
+// 1.1. Get total unread messages count and unread breakdown by conversation
+router.get('/unread-count', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const { totalUnread, byConversation } = await messageStorage.getUnreadCounts(userId);
+    res.json({ success: true, totalUnread, byConversation });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to fetch unread counts', message: err.message });
+  }
+});
+
 // 2. Start or retrieve direct conversation with another user
 router.post('/conversations', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -266,6 +277,19 @@ router.get('/conversations/:id/messages', requireAuth, async (req: Authenticated
     res.json({ success: true, messages });
   } catch (err: any) {
     res.status(403).json({ error: 'Failed to fetch messages', message: err.message });
+  }
+});
+
+// 9.1. Explicitly mark conversation messages as read
+router.post('/conversations/:id/read', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const conversationId = req.params.id as string;
+
+    const result = await messageStorage.markConversationAsRead(conversationId, userId);
+    res.json({ success: true, conversationId, read_at: result.read_at });
+  } catch (err: any) {
+    res.status(400).json({ error: 'Failed to mark conversation as read', message: err.message });
   }
 });
 
