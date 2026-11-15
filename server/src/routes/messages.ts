@@ -14,7 +14,6 @@ const upload = multer({
     files: 10, // Max 10 attachments per message
   },
   fileFilter: (_req, file, cb) => {
-    // Allowed extensions and mimetypes
     const allowedMimes = [
       // Images
       'image/jpeg',
@@ -41,7 +40,7 @@ const upload = multer({
   },
 });
 
-// 1. Get all conversations for current user
+// 1. Get all conversations for current user (1-on-1 and groups)
 router.get('/conversations', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
@@ -85,6 +84,7 @@ router.post('/conversations', requireAuth, async (req: AuthenticatedRequest, res
       success: true,
       conversation: {
         id: conv.id,
+        is_group: false,
         otherParticipant: targetProfile,
         created_at: conv.created_at,
         updated_at: conv.updated_at,
@@ -95,7 +95,168 @@ router.post('/conversations', requireAuth, async (req: AuthenticatedRequest, res
   }
 });
 
-// 3. Get messages for a specific conversation
+// 3. Create a new WhatsApp-like group conversation
+router.post(
+  '/conversations/group',
+  requireAuth,
+  upload.single('avatar'),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const title = req.body.title || 'New Group';
+      let memberIds: string[] = [];
+
+      if (Array.isArray(req.body.memberIds)) {
+        memberIds = req.body.memberIds;
+      } else if (typeof req.body.memberIds === 'string') {
+        try {
+          const parsed = JSON.parse(req.body.memberIds);
+          if (Array.isArray(parsed)) memberIds = parsed;
+        } catch {
+          memberIds = req.body.memberIds.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+      }
+
+      let avatarUrl = req.body.avatarUrl || req.body.avatar_url;
+      const description = req.body.description || '';
+
+      // If an avatar file was uploaded in the request
+      if (req.file) {
+        const tempConvId = `group_${Date.now()}`;
+        avatarUrl = await messageStorage.uploadGroupAvatar(tempConvId, {
+          originalname: req.file.originalname,
+          mimetype: req.file.mimetype,
+          size: req.file.size,
+          buffer: req.file.buffer,
+        });
+      }
+
+      const groupConv = await messageStorage.createGroupConversation(
+        userId,
+        title,
+        memberIds,
+        avatarUrl,
+        description
+      );
+
+      res.json({ success: true, conversation: groupConv });
+    } catch (err: any) {
+      console.error('[Er.NEXA Group Create Error]:', err);
+      res.status(400).json({ error: 'Failed to create group', message: err.message });
+    }
+  }
+);
+
+// 4. Get specific conversation details (including member list and roles)
+router.get('/conversations/:id', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const conversationId = req.params.id as string;
+    const conversation = await messageStorage.getConversation(conversationId, userId);
+    res.json({ success: true, conversation });
+  } catch (err: any) {
+    res.status(403).json({ error: 'Failed to fetch conversation details', message: err.message });
+  }
+});
+
+// 5. Update group details (title, avatarUrl, description)
+router.patch('/conversations/:id', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const conversationId = req.params.id as string;
+    const { title, avatar_url, avatarUrl, description } = req.body;
+
+    const updated = await messageStorage.updateGroupDetails(conversationId, userId, {
+      title,
+      avatar_url: avatar_url || avatarUrl,
+      description,
+    });
+
+    res.json({ success: true, conversation: updated });
+  } catch (err: any) {
+    res.status(400).json({ error: 'Failed to update group details', message: err.message });
+  }
+});
+
+// 6. Upload/change group avatar picture
+router.post(
+  '/conversations/:id/avatar',
+  requireAuth,
+  upload.single('avatar'),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const conversationId = req.params.id as string;
+
+      if (!req.file) {
+        res.status(400).json({ error: 'No image file uploaded.' });
+        return;
+      }
+
+      const avatarUrl = await messageStorage.uploadGroupAvatar(conversationId, {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        buffer: req.file.buffer,
+      });
+
+      const updated = await messageStorage.updateGroupDetails(conversationId, userId, {
+        avatar_url: avatarUrl,
+      });
+
+      res.json({ success: true, avatar_url: avatarUrl, conversation: updated });
+    } catch (err: any) {
+      res.status(400).json({ error: 'Failed to upload group avatar', message: err.message });
+    }
+  }
+);
+
+// 7. Add members to group (Admin only)
+router.post('/conversations/:id/members', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const conversationId = req.params.id as string;
+    let { memberIds } = req.body;
+
+    if (!Array.isArray(memberIds)) {
+      if (typeof memberIds === 'string') {
+        memberIds = [memberIds];
+      } else {
+        memberIds = [];
+      }
+    }
+
+    if (memberIds.length === 0) {
+      res.status(400).json({ error: 'At least one member ID is required.' });
+      return;
+    }
+
+    const updated = await messageStorage.addGroupMembers(conversationId, userId, memberIds);
+    res.json({ success: true, conversation: updated });
+  } catch (err: any) {
+    res.status(403).json({ error: 'Failed to add group members', message: err.message });
+  }
+});
+
+// 8. Remove a member from group (Admin) OR Leave group (Member leaving)
+router.delete(
+  '/conversations/:id/members/:memberId',
+  requireAuth,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const conversationId = req.params.id as string;
+      const memberIdToRemove = req.params.memberId as string;
+
+      const result = await messageStorage.removeGroupMember(conversationId, userId, memberIdToRemove);
+      res.json({ success: true, left: result.left });
+    } catch (err: any) {
+      res.status(403).json({ error: 'Failed to remove member / leave group', message: err.message });
+    }
+  }
+);
+
+// 9. Get messages for a specific conversation
 router.get('/conversations/:id/messages', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
@@ -108,7 +269,7 @@ router.get('/conversations/:id/messages', requireAuth, async (req: Authenticated
   }
 });
 
-// 4. Send a message with optional text content and attachments (supports JSON or multipart/form-data)
+// 10. Send a message with optional text content and attachments (supports JSON or multipart/form-data)
 router.post(
   '/conversations/:id/messages',
   requireAuth,
@@ -158,7 +319,7 @@ router.post(
   }
 );
 
-// 5. Secure attachment download / view endpoint (verified participant access)
+// 11. Secure attachment download / view endpoint (verified participant access)
 router.get(
   '/conversations/:id/attachments/:attachmentId/download',
   requireAuth,

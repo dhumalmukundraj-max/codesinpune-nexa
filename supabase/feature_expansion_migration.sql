@@ -38,19 +38,49 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT,
   is_group BOOLEAN DEFAULT FALSE,
+  avatar_url TEXT,
+  admin_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  description TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure existing conversations table has new group columns
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS admin_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS description TEXT;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;
 
 -- B. Conversation Participants Table
 CREATE TABLE IF NOT EXISTS public.conversation_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  role TEXT DEFAULT 'member' CHECK (role IN ('admin', 'member')),
   last_read_at TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(conversation_id, user_id)
 );
+
+-- Ensure existing conversation_participants table has role column
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.conversation_participants ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member';
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;
 
 -- C. Messages Table
 CREATE TABLE IF NOT EXISTS public.messages (
@@ -105,6 +135,15 @@ DROP POLICY IF EXISTS "Authenticated users can create conversations" ON public.c
 CREATE POLICY "Authenticated users can create conversations" ON public.conversations
   FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Participants can update conversations" ON public.conversations;
+CREATE POLICY "Participants can update conversations" ON public.conversations
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.conversation_participants cp
+      WHERE cp.conversation_id = conversations.id AND cp.user_id = auth.uid()
+    )
+  );
+
 -- Conversation Participants RLS
 DROP POLICY IF EXISTS "Users can view participants of their conversations" ON public.conversation_participants;
 CREATE POLICY "Users can view participants of their conversations" ON public.conversation_participants
@@ -119,6 +158,29 @@ CREATE POLICY "Users can view participants of their conversations" ON public.con
 DROP POLICY IF EXISTS "Users can add participants to conversations" ON public.conversation_participants;
 CREATE POLICY "Users can add participants to conversations" ON public.conversation_participants
   FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Users can leave or admins can remove participants" ON public.conversation_participants;
+CREATE POLICY "Users can leave or admins can remove participants" ON public.conversation_participants
+  FOR DELETE USING (
+    user_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM public.conversation_participants cp
+      WHERE cp.conversation_id = conversation_participants.conversation_id
+        AND cp.user_id = auth.uid()
+        AND cp.role = 'admin'
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can update participant roles" ON public.conversation_participants;
+CREATE POLICY "Admins can update participant roles" ON public.conversation_participants
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.conversation_participants cp
+      WHERE cp.conversation_id = conversation_participants.conversation_id
+        AND cp.user_id = auth.uid()
+        AND cp.role = 'admin'
+    )
+  );
 
 -- Messages RLS: Only conversation participants can view and send messages
 DROP POLICY IF EXISTS "Participants can view messages" ON public.messages;
@@ -140,7 +202,7 @@ CREATE POLICY "Participants can send messages" ON public.messages
     )
   );
 
--- Enable Supabase Realtime for messages and conversations
+-- Enable Supabase Realtime for messages, conversations, and participants
 DO $$
 BEGIN
   BEGIN
@@ -149,6 +211,10 @@ BEGIN
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.conversations;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.conversation_participants;
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 END $$;

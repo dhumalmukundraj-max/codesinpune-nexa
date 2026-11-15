@@ -669,5 +669,117 @@ export async function sendChatMessage(
   return res.json();
 }
 
+export async function createGroupConversation(
+  title: string,
+  memberIds: string[],
+  avatarFile?: File | null,
+  description?: string
+) {
+  const headers = await getAuthHeaders();
+
+  if (avatarFile) {
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('memberIds', JSON.stringify(memberIds));
+    if (description) formData.append('description', description);
+    formData.append('avatar', avatarFile);
+
+    const res = await fetch(`${API_BASE}/messages/conversations/group`, {
+      method: 'POST',
+      headers: { ...headers },
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || 'Failed to create group');
+    }
+    return res.json();
+  }
+
+  const res = await fetch(`${API_BASE}/messages/conversations/group`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, memberIds, description }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to create group');
+  }
+  return res.json();
+}
+
+export async function fetchConversationDetails(conversationId: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to fetch conversation details');
+  }
+  return res.json();
+}
+
+export async function updateGroupDetails(
+  conversationId: string,
+  updates: { title?: string; avatar_url?: string; description?: string }
+) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}`, {
+    method: 'PATCH',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to update group');
+  }
+  return res.json();
+}
+
+export async function uploadGroupAvatar(conversationId: string, avatarFile: File) {
+  const headers = await getAuthHeaders();
+  const formData = new FormData();
+  formData.append('avatar', avatarFile);
+
+  const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/avatar`, {
+    method: 'POST',
+    headers: { ...headers },
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to upload group profile picture');
+  }
+  return res.json();
+}
+
+export async function addGroupMembers(conversationId: string, memberIds: string[]) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/members`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ memberIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to add members');
+  }
+  return res.json();
+}
+
+export async function removeGroupMember(conversationId: string, memberId: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/members/${memberId}`, {
+    method: 'DELETE',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to remove member or leave group');
+  }
+  return res.json();
+}
+
 
 

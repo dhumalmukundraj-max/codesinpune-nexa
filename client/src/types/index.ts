@@ -314,17 +314,32 @@ export interface MessageAttachment {
   thumbnail_url?: string;
 }
 
+export interface GroupMemberInfo {
+  user_id: string;
+  role: 'admin' | 'member';
+  joined_at?: string;
+  profile?: UserProfile;
+}
+
 export interface ConversationItem {
   id: string;
-  otherParticipant: UserProfile;
+  title?: string;
+  is_group?: boolean;
+  avatar_url?: string;
+  admin_id?: string;
+  description?: string;
+  otherParticipant?: UserProfile;
+  members?: GroupMemberInfo[];
   lastMessage?: {
     content: string;
     sender_id: string;
+    sender_name?: string;
     created_at: string;
     message_type?: 'text' | 'image' | 'document' | 'mixed';
     attachments_count?: number;
   };
   unreadCount: number;
+  created_at?: string;
   updated_at: string;
 }
 

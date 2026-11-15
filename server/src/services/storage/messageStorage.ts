@@ -64,15 +64,28 @@ export interface MessageRecord {
   metadata?: Record<string, any>;
 }
 
+export interface GroupMemberInfo {
+  user_id: string;
+  role: 'admin' | 'member';
+  joined_at?: string;
+  profile?: UserProfileRecord;
+}
+
 export interface ConversationRecord {
   id: string;
   title?: string;
+  is_group?: boolean;
+  avatar_url?: string;
+  admin_id?: string;
+  description?: string;
   participant_ids: string[];
+  roles?: Record<string, 'admin' | 'member'>;
   created_at: string;
   updated_at: string;
   last_message?: {
     content: string;
     sender_id: string;
+    sender_name?: string;
     created_at: string;
     message_type?: MessageType;
     attachments_count?: number;
@@ -81,10 +94,17 @@ export interface ConversationRecord {
 
 export interface ConversationDetailView {
   id: string;
-  otherParticipant: UserProfileRecord;
+  title?: string;
+  is_group: boolean;
+  avatar_url?: string;
+  admin_id?: string;
+  description?: string;
+  otherParticipant?: UserProfileRecord;
+  members?: GroupMemberInfo[];
   lastMessage?: {
     content: string;
     sender_id: string;
+    sender_name?: string;
     created_at: string;
     message_type?: MessageType;
     attachments_count?: number;
@@ -161,8 +181,9 @@ export const messageStorage = {
   async getOrCreateDirectConversation(userA: string, userB: string): Promise<ConversationRecord> {
     const state = readLocalMessenger();
 
-    // Check if conversation already exists in local state
+    // Check if direct conversation already exists in local state
     const existing = state.conversations.find((c) =>
+      !c.is_group &&
       c.participant_ids.length === 2 &&
       c.participant_ids.includes(userA) &&
       c.participant_ids.includes(userB)
@@ -186,39 +207,59 @@ export const messageStorage = {
             .from('conversation_participants')
             .select('conversation_id')
             .eq('user_id', userB)
-            .in('conversation_id', convIds)
-            .limit(1);
+            .in('conversation_id', convIds);
 
           if (matched && matched.length > 0) {
-            const foundId = matched[0].conversation_id;
-            const conv: ConversationRecord = {
-              id: foundId,
-              participant_ids: [userA, userB],
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            state.conversations.push(conv);
-            writeLocalMessenger(state);
-            return conv;
+            for (const m of matched) {
+              const { data: convData } = await supabaseAdmin
+                .from('conversations')
+                .select('*')
+                .eq('id', m.conversation_id)
+                .single();
+
+              if (convData && !convData.is_group) {
+                const conv: ConversationRecord = {
+                  id: convData.id,
+                  title: convData.title,
+                  is_group: false,
+                  participant_ids: [userA, userB],
+                  roles: { [userA]: 'member', [userB]: 'member' },
+                  created_at: convData.created_at || new Date().toISOString(),
+                  updated_at: convData.updated_at || new Date().toISOString(),
+                };
+                const existingIdx = state.conversations.findIndex((c) => c.id === conv.id);
+                if (existingIdx >= 0) {
+                  state.conversations[existingIdx] = conv;
+                } else {
+                  state.conversations.push(conv);
+                }
+                writeLocalMessenger(state);
+                return conv;
+              }
+            }
           }
         }
 
-        // Create new in Supabase
+        // Create new direct conversation in Supabase
         const { data: newConv } = await supabaseAdmin
           .from('conversations')
-          .insert({})
+          .insert({
+            is_group: false,
+          })
           .select()
           .single();
 
         if (newConv) {
           await supabaseAdmin.from('conversation_participants').insert([
-            { conversation_id: newConv.id, user_id: userA },
-            { conversation_id: newConv.id, user_id: userB },
+            { conversation_id: newConv.id, user_id: userA, role: 'member' },
+            { conversation_id: newConv.id, user_id: userB, role: 'member' },
           ]);
 
           const conv: ConversationRecord = {
             id: newConv.id,
+            is_group: false,
             participant_ids: [userA, userB],
+            roles: { [userA]: 'member', [userB]: 'member' },
             created_at: newConv.created_at,
             updated_at: newConv.updated_at,
           };
@@ -226,13 +267,17 @@ export const messageStorage = {
           writeLocalMessenger(state);
           return conv;
         }
-      } catch {}
+      } catch (err: any) {
+        console.warn('[Er.NEXA messageStorage] Supabase direct conv error:', err.message);
+      }
     }
 
     // Local fallback creation
     const newConv: ConversationRecord = {
       id: crypto.randomUUID(),
+      is_group: false,
       participant_ids: [userA, userB],
+      roles: { [userA]: 'member', [userB]: 'member' },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -242,30 +287,630 @@ export const messageStorage = {
   },
 
   /**
-   * Retrieves conversation list for a user with participant profiles and unread count
+   * Creates a WhatsApp-like group conversation with multiple members and admin role
+   */
+  async createGroupConversation(
+    creatorId: string,
+    title: string,
+    memberIds: string[],
+    avatarUrl?: string,
+    description?: string
+  ): Promise<ConversationDetailView> {
+    const state = readLocalMessenger();
+    const now = new Date().toISOString();
+    const convId = crypto.randomUUID();
+
+    const cleanTitle = (title || 'Er.NEXA Project Group').trim();
+    const allMemberIds = Array.from(new Set([creatorId, ...memberIds.filter(Boolean)]));
+    const roleMap: Record<string, 'admin' | 'member'> = {};
+    allMemberIds.forEach((uid) => {
+      roleMap[uid] = uid === creatorId ? 'admin' : 'member';
+    });
+
+    const finalAvatar = avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${convId}`;
+
+    // 1. Try Supabase
+    if (supabaseAdmin) {
+      try {
+        const { data: newConv, error: convErr } = await supabaseAdmin
+          .from('conversations')
+          .insert({
+            id: convId,
+            title: cleanTitle,
+            is_group: true,
+            avatar_url: finalAvatar,
+            admin_id: creatorId,
+            description: description || '',
+            created_at: now,
+            updated_at: now,
+          })
+          .select()
+          .single();
+
+        if (newConv && !convErr) {
+          const participantInserts = allMemberIds.map((uid) => ({
+            conversation_id: convId,
+            user_id: uid,
+            role: roleMap[uid],
+          }));
+          await supabaseAdmin.from('conversation_participants').insert(participantInserts);
+        } else if (convErr) {
+          // If extended columns are not present yet in schema, fallback to basic fields
+          await supabaseAdmin.from('conversations').insert({
+            id: convId,
+            title: cleanTitle,
+            is_group: true,
+            created_at: now,
+            updated_at: now,
+          });
+          const basicParticipants = allMemberIds.map((uid) => ({
+            conversation_id: convId,
+            user_id: uid,
+          }));
+          await supabaseAdmin.from('conversation_participants').insert(basicParticipants);
+        }
+      } catch (err: any) {
+        console.warn('[Er.NEXA messageStorage] Supabase group create warning:', err.message);
+      }
+    }
+
+    // 2. Local State
+    const convRecord: ConversationRecord = {
+      id: convId,
+      title: cleanTitle,
+      is_group: true,
+      avatar_url: finalAvatar,
+      admin_id: creatorId,
+      description: description || '',
+      participant_ids: allMemberIds,
+      roles: roleMap,
+      created_at: now,
+      updated_at: now,
+    };
+    state.conversations.push(convRecord);
+
+    // Initial group creation system announcement
+    const creatorProf = await profileStorage.getProfile(creatorId);
+    const creatorName = creatorProf.display_name || creatorProf.full_name || `@${creatorProf.username || 'admin'}`;
+    const initialMessage: MessageRecord = {
+      id: crypto.randomUUID(),
+      conversation_id: convId,
+      sender_id: creatorId,
+      sender_name: creatorName,
+      sender_avatar: creatorProf.avatar_url,
+      content: `🎉 ${creatorName} created group "${cleanTitle}"`,
+      created_at: now,
+      message_type: 'text',
+      attachments: [],
+      metadata: { is_system_announcement: true },
+    };
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('messages').insert({
+          id: initialMessage.id,
+          conversation_id: convId,
+          sender_id: creatorId,
+          content: initialMessage.content,
+          message_type: 'text',
+          attachments: [],
+          metadata: initialMessage.metadata,
+          created_at: now,
+        });
+      } catch {}
+    }
+
+    state.messages.push(initialMessage);
+    convRecord.last_message = {
+      content: initialMessage.content,
+      sender_id: creatorId,
+      sender_name: creatorName,
+      created_at: now,
+      message_type: 'text',
+    };
+    state.reads[`${convId}:${creatorId}`] = now;
+    writeLocalMessenger(state);
+
+    // Build return detail view
+    const members: GroupMemberInfo[] = [];
+    for (const pid of allMemberIds) {
+      const p = await profileStorage.getProfile(pid);
+      members.push({
+        user_id: pid,
+        role: roleMap[pid],
+        profile: p,
+      });
+    }
+
+    return {
+      id: convId,
+      title: cleanTitle,
+      is_group: true,
+      avatar_url: finalAvatar,
+      admin_id: creatorId,
+      description: description || '',
+      members,
+      lastMessage: convRecord.last_message,
+      unreadCount: 0,
+      updated_at: now,
+    };
+  },
+
+  /**
+   * Adds new members to an existing group conversation (Admin only)
+   */
+  async addGroupMembers(
+    conversationId: string,
+    requesterId: string,
+    newMemberIds: string[]
+  ): Promise<ConversationDetailView> {
+    const state = readLocalMessenger();
+    const conv = state.conversations.find((c) => c.id === conversationId);
+    if (!conv) {
+      throw new Error('Conversation not found.');
+    }
+    if (!conv.is_group) {
+      throw new Error('Cannot add members to an individual direct chat.');
+    }
+
+    const requesterRole = conv.roles?.[requesterId] || (conv.admin_id === requesterId ? 'admin' : 'member');
+    if (requesterRole !== 'admin') {
+      throw new Error('Only group administrators can add new members.');
+    }
+
+    const uniqueNewIds = newMemberIds.filter((id) => !conv.participant_ids.includes(id) && Boolean(id));
+    if (uniqueNewIds.length === 0) {
+      return this.getConversation(conversationId, requesterId);
+    }
+
+    const now = new Date().toISOString();
+    uniqueNewIds.forEach((uid) => {
+      conv.participant_ids.push(uid);
+      if (!conv.roles) conv.roles = {};
+      conv.roles[uid] = 'member';
+    });
+    conv.updated_at = now;
+
+    if (supabaseAdmin) {
+      try {
+        const rows = uniqueNewIds.map((uid) => ({
+          conversation_id: conversationId,
+          user_id: uid,
+          role: 'member',
+        }));
+        await supabaseAdmin.from('conversation_participants').insert(rows);
+      } catch (err: any) {
+        console.warn('[Er.NEXA messageStorage] Supabase add member notice:', err.message);
+      }
+    }
+
+    const requesterProf = await profileStorage.getProfile(requesterId);
+    const addedProfiles = await Promise.all(uniqueNewIds.map((id) => profileStorage.getProfile(id)));
+    const addedNames = addedProfiles.map((p) => p.display_name || p.full_name || `@${p.username}`).join(', ');
+
+    const sysMsg: MessageRecord = {
+      id: crypto.randomUUID(),
+      conversation_id: conversationId,
+      sender_id: requesterId,
+      sender_name: requesterProf.display_name || requesterProf.full_name,
+      sender_avatar: requesterProf.avatar_url,
+      content: `👋 ${requesterProf.display_name || 'Admin'} added ${addedNames} to the group`,
+      created_at: now,
+      message_type: 'text',
+      attachments: [],
+      metadata: { is_system_announcement: true },
+    };
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('messages').insert({
+          id: sysMsg.id,
+          conversation_id: conversationId,
+          sender_id: requesterId,
+          content: sysMsg.content,
+          message_type: 'text',
+          attachments: [],
+          metadata: sysMsg.metadata,
+          created_at: now,
+        });
+      } catch {}
+    }
+
+    state.messages.push(sysMsg);
+    conv.last_message = {
+      content: sysMsg.content,
+      sender_id: requesterId,
+      sender_name: requesterProf.display_name,
+      created_at: now,
+      message_type: 'text',
+    };
+    writeLocalMessenger(state);
+
+    return this.getConversation(conversationId, requesterId);
+  },
+
+  /**
+   * Removes a member from group (Admin) OR allows a user to leave the group
+   */
+  async removeGroupMember(
+    conversationId: string,
+    requesterId: string,
+    memberIdToRemove: string
+  ): Promise<{ success: boolean; left: boolean }> {
+    const state = readLocalMessenger();
+    const conv = state.conversations.find((c) => c.id === conversationId);
+    if (!conv) {
+      throw new Error('Conversation not found.');
+    }
+    if (!conv.is_group) {
+      throw new Error('Cannot remove members from an individual chat.');
+    }
+
+    const isSelfLeaving = requesterId === memberIdToRemove;
+    const requesterRole = conv.roles?.[requesterId] || (conv.admin_id === requesterId ? 'admin' : 'member');
+
+    if (!isSelfLeaving && requesterRole !== 'admin') {
+      throw new Error('Only group administrators can remove members.');
+    }
+
+    const now = new Date().toISOString();
+    conv.participant_ids = conv.participant_ids.filter((id) => id !== memberIdToRemove);
+    if (conv.roles) delete conv.roles[memberIdToRemove];
+    conv.updated_at = now;
+
+    // If leaving member was admin, transfer admin rights to the next available participant
+    if (conv.admin_id === memberIdToRemove && conv.participant_ids.length > 0) {
+      const nextAdmin = conv.participant_ids[0];
+      conv.admin_id = nextAdmin;
+      if (!conv.roles) conv.roles = {};
+      conv.roles[nextAdmin] = 'admin';
+
+      if (supabaseAdmin) {
+        try {
+          await supabaseAdmin
+            .from('conversations')
+            .update({ admin_id: nextAdmin })
+            .eq('id', conversationId);
+          await supabaseAdmin
+            .from('conversation_participants')
+            .update({ role: 'admin' })
+            .match({ conversation_id: conversationId, user_id: nextAdmin });
+        } catch {}
+      }
+    }
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin
+          .from('conversation_participants')
+          .delete()
+          .match({ conversation_id: conversationId, user_id: memberIdToRemove });
+      } catch (err: any) {
+        console.warn('[Er.NEXA messageStorage] Supabase remove member notice:', err.message);
+      }
+    }
+
+    const removedProf = await profileStorage.getProfile(memberIdToRemove);
+    const requesterProf = await profileStorage.getProfile(requesterId);
+    const content = isSelfLeaving
+      ? `🚪 ${removedProf.display_name || 'A member'} left the group`
+      : `🚫 ${requesterProf.display_name || 'Admin'} removed ${removedProf.display_name || 'a member'} from the group`;
+
+    const sysMsg: MessageRecord = {
+      id: crypto.randomUUID(),
+      conversation_id: conversationId,
+      sender_id: requesterId,
+      sender_name: requesterProf.display_name || requesterProf.full_name,
+      sender_avatar: requesterProf.avatar_url,
+      content,
+      created_at: now,
+      message_type: 'text',
+      attachments: [],
+      metadata: { is_system_announcement: true },
+    };
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('messages').insert({
+          id: sysMsg.id,
+          conversation_id: conversationId,
+          sender_id: requesterId,
+          content: sysMsg.content,
+          message_type: 'text',
+          attachments: [],
+          metadata: sysMsg.metadata,
+          created_at: now,
+        });
+      } catch {}
+    }
+
+    state.messages.push(sysMsg);
+    conv.last_message = {
+      content: sysMsg.content,
+      sender_id: requesterId,
+      sender_name: requesterProf.display_name,
+      created_at: now,
+      message_type: 'text',
+    };
+    writeLocalMessenger(state);
+
+    return { success: true, left: isSelfLeaving };
+  },
+
+  /**
+   * Updates group details (subject/title, avatar_url, description)
+   */
+  async updateGroupDetails(
+    conversationId: string,
+    requesterId: string,
+    updates: { title?: string; avatar_url?: string; description?: string }
+  ): Promise<ConversationDetailView> {
+    const state = readLocalMessenger();
+    const conv = state.conversations.find((c) => c.id === conversationId);
+    if (!conv) throw new Error('Conversation not found.');
+    if (!conv.is_group) throw new Error('Cannot update group details on direct chat.');
+    if (!conv.participant_ids.includes(requesterId)) throw new Error('Access denied.');
+
+    const now = new Date().toISOString();
+    const oldTitle = conv.title;
+    if (updates.title !== undefined && updates.title.trim()) {
+      conv.title = updates.title.trim();
+    }
+    if (updates.avatar_url !== undefined && updates.avatar_url.trim()) {
+      conv.avatar_url = updates.avatar_url.trim();
+    }
+    if (updates.description !== undefined) {
+      conv.description = updates.description.trim();
+    }
+    conv.updated_at = now;
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin
+          .from('conversations')
+          .update({
+            title: conv.title,
+            avatar_url: conv.avatar_url,
+            description: conv.description,
+            updated_at: now,
+          })
+          .eq('id', conversationId);
+      } catch (err: any) {
+        console.warn('[Er.NEXA messageStorage] Supabase group update notice:', err.message);
+      }
+    }
+
+    if (updates.title && updates.title.trim() !== oldTitle) {
+      const requesterProf = await profileStorage.getProfile(requesterId);
+      const sysMsg: MessageRecord = {
+        id: crypto.randomUUID(),
+        conversation_id: conversationId,
+        sender_id: requesterId,
+        sender_name: requesterProf.display_name || requesterProf.full_name,
+        sender_avatar: requesterProf.avatar_url,
+        content: `✏️ ${requesterProf.display_name || 'Admin'} changed group name to "${conv.title}"`,
+        created_at: now,
+        message_type: 'text',
+        attachments: [],
+        metadata: { is_system_announcement: true },
+      };
+      state.messages.push(sysMsg);
+      conv.last_message = {
+        content: sysMsg.content,
+        sender_id: requesterId,
+        sender_name: requesterProf.display_name,
+        created_at: now,
+        message_type: 'text',
+      };
+    }
+
+    writeLocalMessenger(state);
+    return this.getConversation(conversationId, requesterId);
+  },
+
+  /**
+   * Retrieves full details for a conversation (individual or group)
+   */
+  async getConversation(conversationId: string, userId: string): Promise<ConversationDetailView> {
+    const state = readLocalMessenger();
+    let conv = state.conversations.find((c) => c.id === conversationId);
+
+    // If not in local state, try loading from Supabase
+    if (!conv && supabaseAdmin) {
+      try {
+        const { data: convData } = await supabaseAdmin
+          .from('conversations')
+          .select('*')
+          .eq('id', conversationId)
+          .single();
+
+        if (convData) {
+          const { data: participants } = await supabaseAdmin
+            .from('conversation_participants')
+            .select('user_id, role')
+            .eq('conversation_id', conversationId);
+
+          const pIds = (participants || []).map((p: any) => p.user_id);
+          const roleMap: Record<string, 'admin' | 'member'> = {};
+          (participants || []).forEach((p: any) => {
+            roleMap[p.user_id] = p.role || 'member';
+          });
+
+          conv = {
+            id: convData.id,
+            title: convData.title,
+            is_group: Boolean(convData.is_group),
+            avatar_url: convData.avatar_url,
+            admin_id: convData.admin_id,
+            description: convData.description,
+            participant_ids: pIds,
+            roles: roleMap,
+            created_at: convData.created_at,
+            updated_at: convData.updated_at,
+          };
+          state.conversations.push(conv);
+          writeLocalMessenger(state);
+        }
+      } catch {}
+    }
+
+    if (!conv || !conv.participant_ids.includes(userId)) {
+      throw new Error('Conversation not found or access denied.');
+    }
+
+    const lastRead = state.reads[`${conv.id}:${userId}`] || '1970-01-01';
+    const unreadCount = state.messages.filter(
+      (m) => m.conversation_id === conv.id && m.sender_id !== userId && m.created_at > lastRead
+    ).length;
+
+    if (conv.is_group) {
+      const members: GroupMemberInfo[] = [];
+      for (const pid of conv.participant_ids) {
+        const prof = await profileStorage.getProfile(pid);
+        const role = (conv.roles && conv.roles[pid]) || (conv.admin_id === pid ? 'admin' : 'member');
+        members.push({
+          user_id: pid,
+          role,
+          profile: prof,
+        });
+      }
+
+      return {
+        id: conv.id,
+        title: conv.title || 'Project Group',
+        is_group: true,
+        avatar_url: conv.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${conv.id}`,
+        admin_id: conv.admin_id,
+        description: conv.description,
+        members,
+        lastMessage: conv.last_message,
+        unreadCount,
+        updated_at: conv.updated_at,
+      };
+    } else {
+      const otherId = conv.participant_ids.find((id) => id !== userId) || userId;
+      const otherProfile = await profileStorage.getProfile(otherId);
+
+      return {
+        id: conv.id,
+        is_group: false,
+        otherParticipant: otherProfile,
+        lastMessage: conv.last_message,
+        unreadCount,
+        updated_at: conv.updated_at,
+      };
+    }
+  },
+
+  /**
+   * Retrieves conversation list for a user with participant profiles, groups and unread count
    */
   async getUserConversations(userId: string): Promise<ConversationDetailView[]> {
     const state = readLocalMessenger();
+
+    // Sync with Supabase if available
+    if (supabaseAdmin) {
+      try {
+        const { data: userConvs } = await supabaseAdmin
+          .from('conversation_participants')
+          .select('conversation_id, role, conversations(*)')
+          .eq('user_id', userId);
+
+        if (userConvs && userConvs.length > 0) {
+          const convIds = userConvs.map((uc: any) => uc.conversation_id);
+          const { data: allParticipants } = await supabaseAdmin
+            .from('conversation_participants')
+            .select('conversation_id, user_id, role')
+            .in('conversation_id', convIds);
+
+          for (const uc of userConvs) {
+            const cData: any = Array.isArray((uc as any).conversations) ? (uc as any).conversations[0] : (uc as any).conversations;
+            if (!cData) continue;
+            const pRows = (allParticipants || []).filter((p: any) => p.conversation_id === cData.id);
+            const pIds = pRows.map((p: any) => p.user_id);
+            const roleMap: Record<string, 'admin' | 'member'> = {};
+            pRows.forEach((p: any) => {
+              roleMap[p.user_id] = p.role || 'member';
+            });
+
+            const existingIdx = state.conversations.findIndex((c) => c.id === cData.id);
+            const convRecord: ConversationRecord = {
+              id: cData.id,
+              title: cData.title,
+              is_group: Boolean(cData.is_group),
+              avatar_url: cData.avatar_url,
+              admin_id: cData.admin_id,
+              description: cData.description,
+              participant_ids: pIds.length > 0 ? pIds : [userId],
+              roles: roleMap,
+              created_at: cData.created_at || new Date().toISOString(),
+              updated_at: cData.updated_at || new Date().toISOString(),
+              last_message: existingIdx >= 0 ? state.conversations[existingIdx].last_message : undefined,
+            };
+
+            if (existingIdx >= 0) {
+              state.conversations[existingIdx] = {
+                ...state.conversations[existingIdx],
+                ...convRecord,
+                last_message: state.conversations[existingIdx].last_message,
+              };
+            } else {
+              state.conversations.push(convRecord);
+            }
+          }
+          writeLocalMessenger(state);
+        }
+      } catch (err: any) {
+        console.warn('[Er.NEXA messageStorage] Supabase sync user conversations:', err.message);
+      }
+    }
+
     const userConvs = state.conversations.filter((c) => c.participant_ids.includes(userId));
     const views: ConversationDetailView[] = [];
 
     for (const c of userConvs) {
-      const otherId = c.participant_ids.find((id) => id !== userId) || userId;
-      const otherProfile = await profileStorage.getProfile(otherId);
-
-      // Count unread
       const lastRead = state.reads[`${c.id}:${userId}`] || '1970-01-01';
       const unreadCount = state.messages.filter(
         (m) => m.conversation_id === c.id && m.sender_id !== userId && m.created_at > lastRead
       ).length;
 
-      views.push({
-        id: c.id,
-        otherParticipant: otherProfile,
-        lastMessage: c.last_message,
-        unreadCount,
-        updated_at: c.updated_at,
-      });
+      if (c.is_group) {
+        const members: GroupMemberInfo[] = [];
+        for (const pid of c.participant_ids) {
+          const prof = await profileStorage.getProfile(pid);
+          const role = (c.roles && c.roles[pid]) || (c.admin_id === pid ? 'admin' : 'member');
+          members.push({
+            user_id: pid,
+            role,
+            profile: prof,
+          });
+        }
+
+        views.push({
+          id: c.id,
+          title: c.title || 'Project Group',
+          is_group: true,
+          avatar_url: c.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${c.id}`,
+          admin_id: c.admin_id,
+          description: c.description,
+          members,
+          lastMessage: c.last_message,
+          unreadCount,
+          updated_at: c.updated_at,
+        });
+      } else {
+        const otherId = c.participant_ids.find((id) => id !== userId) || userId;
+        const otherProfile = await profileStorage.getProfile(otherId);
+
+        views.push({
+          id: c.id,
+          is_group: false,
+          otherParticipant: otherProfile,
+          lastMessage: c.last_message,
+          unreadCount,
+          updated_at: c.updated_at,
+        });
+      }
     }
 
     // Sort by latest message / update
@@ -273,11 +918,40 @@ export const messageStorage = {
   },
 
   /**
-   * Retrieves ordered messages for a conversation, including attachment metadata
+   * Retrieves ordered messages for a conversation, populating sender identity
    */
   async getMessages(conversationId: string, userId: string): Promise<MessageRecord[]> {
     const state = readLocalMessenger();
-    const conv = state.conversations.find((c) => c.id === conversationId);
+    let conv = state.conversations.find((c) => c.id === conversationId);
+
+    // If conversation not in local state, check Supabase
+    if (!conv && supabaseAdmin) {
+      try {
+        const { data: convData } = await supabaseAdmin
+          .from('conversations')
+          .select('*')
+          .eq('id', conversationId)
+          .single();
+        if (convData) {
+          const { data: pData } = await supabaseAdmin
+            .from('conversation_participants')
+            .select('user_id')
+            .eq('conversation_id', conversationId);
+          conv = {
+            id: convData.id,
+            title: convData.title,
+            is_group: Boolean(convData.is_group),
+            avatar_url: convData.avatar_url,
+            admin_id: convData.admin_id,
+            participant_ids: (pData || []).map((p: any) => p.user_id),
+            created_at: convData.created_at,
+            updated_at: convData.updated_at,
+          };
+          state.conversations.push(conv);
+          writeLocalMessenger(state);
+        }
+      } catch {}
+    }
 
     // Participant verification
     if (conv && !conv.participant_ids.includes(userId)) {
@@ -288,6 +962,8 @@ export const messageStorage = {
     state.reads[`${conversationId}:${userId}`] = new Date().toISOString();
     writeLocalMessenger(state);
 
+    let fetchedMessages: MessageRecord[] = [];
+
     // Try Supabase first
     if (supabaseAdmin) {
       try {
@@ -296,10 +972,10 @@ export const messageStorage = {
           .select('id, conversation_id, sender_id, content, attachments, message_type, metadata, created_at')
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: true })
-          .limit(150);
+          .limit(200);
 
         if (data && data.length > 0 && !error) {
-          return data.map((m: any) => {
+          fetchedMessages = data.map((m: any) => {
             const rawAttachments = m.attachments || m.metadata?.attachments || [];
             return {
               id: m.id,
@@ -316,9 +992,27 @@ export const messageStorage = {
       } catch {}
     }
 
-    return state.messages
-      .filter((m) => m.conversation_id === conversationId)
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(a.created_at).getTime());
+    if (fetchedMessages.length === 0) {
+      fetchedMessages = state.messages
+        .filter((m) => m.conversation_id === conversationId)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+
+    // Ensure sender display name and avatar are populated for group chat clarity
+    const profileCache = new Map<string, UserProfileRecord>();
+    for (const msg of fetchedMessages) {
+      if (!msg.sender_name || !msg.sender_avatar) {
+        let prof = profileCache.get(msg.sender_id);
+        if (!prof) {
+          prof = await profileStorage.getProfile(msg.sender_id);
+          profileCache.set(msg.sender_id, prof);
+        }
+        msg.sender_name = msg.sender_name || prof.display_name || prof.full_name || `@${prof.username || 'engineer'}`;
+        msg.sender_avatar = msg.sender_avatar || prof.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${msg.sender_id}`;
+      }
+    }
+
+    return fetchedMessages;
   },
 
   /**
@@ -387,6 +1081,47 @@ export const messageStorage = {
   },
 
   /**
+   * Uploads group avatar image to Supabase Storage or local fallback
+   */
+  async uploadGroupAvatar(
+    conversationId: string,
+    file: { originalname: string; mimetype: string; size: number; buffer: Buffer }
+  ): Promise<string> {
+    await ensureAttachmentBucket();
+    const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const storagePath = `groups/${conversationId}/avatar-${Date.now()}-${sanitizedName}`;
+    let avatarUrl = '';
+
+    if (supabaseAdmin) {
+      try {
+        const { error } = await supabaseAdmin.storage
+          .from(ATTACHMENT_BUCKET)
+          .upload(storagePath, file.buffer, {
+            contentType: file.mimetype,
+            upsert: true,
+          });
+        if (!error) {
+          const { data } = supabaseAdmin.storage
+            .from(ATTACHMENT_BUCKET)
+            .getPublicUrl(storagePath);
+          if (data?.publicUrl) {
+            avatarUrl = data.publicUrl;
+          }
+        }
+      } catch {}
+    }
+
+    if (!avatarUrl) {
+      const localDir = getAttachmentsDir(conversationId);
+      const filename = `avatar_${Date.now()}_${sanitizedName}`;
+      fs.writeFileSync(path.join(localDir, filename), file.buffer);
+      avatarUrl = `/api/messages/conversations/${conversationId}/attachments/${filename}/download`;
+    }
+
+    return avatarUrl;
+  },
+
+  /**
    * Sends a message with optional text content and optional attachments
    */
   async sendMessage(
@@ -424,12 +1159,13 @@ export const messageStorage = {
       }
     }
 
+    const senderDisplayName = senderProfile.display_name || senderProfile.full_name || `@${senderProfile.username || 'engineer'}`;
     const message: MessageRecord = {
       id: messageId,
       conversation_id: conversationId,
       sender_id: senderId,
-      sender_name: senderProfile.display_name || senderProfile.full_name || 'Engineer',
-      sender_avatar: senderProfile.avatar_url,
+      sender_name: senderDisplayName,
+      sender_avatar: senderProfile.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${senderId}`,
       content: content ? content.trim() : '',
       created_at: now,
       message_type: messageType,
@@ -470,6 +1206,7 @@ export const messageStorage = {
       conv.last_message = {
         content: message.content || (attachments.length > 0 ? `Shared ${attachments.length} file(s)` : 'New message'),
         sender_id: senderId,
+        sender_name: senderDisplayName,
         created_at: now,
         message_type: messageType,
         attachments_count: attachments.length,
@@ -505,6 +1242,20 @@ export const messageStorage = {
     const attachment = message?.attachments?.find((a) => a.id === attachmentId);
 
     if (!attachment) {
+      // Check if attachmentId matches a local file (e.g. avatar)
+      const localDir = getAttachmentsDir(conversationId);
+      if (fs.existsSync(localDir)) {
+        const files = fs.readdirSync(localDir);
+        const match = files.find((f) => f.includes(attachmentId));
+        if (match) {
+          const fullPath = path.join(localDir, match);
+          return {
+            filename: match,
+            mimetype: match.endsWith('.png') ? 'image/png' : match.endsWith('.jpg') || match.endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream',
+            streamOrBuffer: fs.readFileSync(fullPath),
+          };
+        }
+      }
       throw new Error('Attachment not found.');
     }
 
