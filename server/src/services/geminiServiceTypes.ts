@@ -16,6 +16,8 @@ export interface AnalysisResult {
       name: string;
       tagline: string;
       description: string;
+      problemStatement?: string;
+      isProblemStatementSolved?: boolean;
       primaryLanguages: string[];
       frameworks: string[];
       architectureStyle: string;

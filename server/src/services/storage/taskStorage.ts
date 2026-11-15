@@ -1,21 +1,32 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import os from 'os';
 import { supabaseAdmin } from '../../config/index.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DATA_DIR = path.resolve(__dirname, '../../../../server/data/round3');
+function getDataDir(): string {
+  const candidates = [
+    path.resolve(process.cwd(), 'data/round3'),
+    path.resolve(process.cwd(), 'server/data/round3'),
+    path.join(os.tmpdir(), 'ernexa_round3'),
+  ];
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  for (const candidate of candidates) {
+    try {
+      if (!fs.existsSync(candidate)) {
+        fs.mkdirSync(candidate, { recursive: true });
+      }
+      const testFile = path.join(candidate, '.write_test_task');
+      fs.writeFileSync(testFile, 'ok', 'utf-8');
+      fs.unlinkSync(testFile);
+      return candidate;
+    } catch {}
   }
+  return '';
 }
 
 function getLocalTaskPath(projectId: string): string {
-  ensureDataDir();
-  return path.join(DATA_DIR, `tasks_${projectId}.json`);
+  const dir = getDataDir();
+  return dir ? path.join(dir, `tasks_${projectId}.json`) : '';
 }
 
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
@@ -66,8 +77,12 @@ export interface RoadmapPhaseSummary {
   tasks: ProjectTaskRecord[];
 }
 
+// In-memory cache for tasks
+const memoryTasks = new Map<string, ProjectTaskRecord[]>();
+
 export const taskStorage = {
   async getTasks(projectId: string): Promise<ProjectTaskRecord[]> {
+    // 1. Try Supabase
     if (supabaseAdmin) {
       try {
         const { data, error } = await supabaseAdmin
@@ -77,69 +92,90 @@ export const taskStorage = {
           .order('created_at', { ascending: true });
 
         if (!error && data && data.length > 0) {
+          memoryTasks.set(projectId, data as ProjectTaskRecord[]);
           return data as ProjectTaskRecord[];
         }
       } catch {}
     }
 
+    // 2. Try Local File
     const localFile = getLocalTaskPath(projectId);
-    if (fs.existsSync(localFile)) {
+    if (localFile && fs.existsSync(localFile)) {
       try {
-        return JSON.parse(fs.readFileSync(localFile, 'utf-8'));
+        const tasks = JSON.parse(fs.readFileSync(localFile, 'utf-8'));
+        memoryTasks.set(projectId, tasks);
+        return tasks;
       } catch {}
     }
 
-    return [];
+    // 3. Fallback to memory
+    return memoryTasks.get(projectId) || [];
   },
 
   async saveTasks(projectId: string, tasks: ProjectTaskRecord[]): Promise<ProjectTaskRecord[]> {
-    const formatted = tasks.map((t) => ({
+    const formatted = tasks.map((t, idx) => ({
       ...t,
+      id: t.id || `task-${projectId.slice(0, 8)}-${idx + 1}`,
       project_id: projectId,
       updated_at: new Date().toISOString(),
       created_at: t.created_at || new Date().toISOString(),
     }));
 
+    memoryTasks.set(projectId, formatted);
+
+    // Persist to Supabase
     if (supabaseAdmin) {
       try {
         await supabaseAdmin.from('project_tasks').delete().eq('project_id', projectId);
         if (formatted.length > 0) {
-          const chunkSize = 50;
+          const chunkSize = 40;
           for (let i = 0; i < formatted.length; i += chunkSize) {
             await supabaseAdmin.from('project_tasks').insert(formatted.slice(i, i + chunkSize));
           }
         }
-      } catch {}
+      } catch (err: any) {
+        console.warn('[Er.NEXA taskStorage] Supabase saveTasks notice:', err.message);
+      }
     }
 
-    fs.writeFileSync(getLocalTaskPath(projectId), JSON.stringify(formatted, null, 2));
+    // Persist to local disk
+    try {
+      const localFile = getLocalTaskPath(projectId);
+      if (localFile) {
+        fs.writeFileSync(localFile, JSON.stringify(formatted, null, 2), 'utf-8');
+      }
+    } catch {}
+
     return formatted;
   },
 
   async upsertTask(projectId: string, task: ProjectTaskRecord): Promise<ProjectTaskRecord> {
     const existing = await this.getTasks(projectId);
-    const index = existing.findIndex((t) => t.id === task.id);
-    const updatedTask = {
+    const updated = {
       ...task,
       project_id: projectId,
       updated_at: new Date().toISOString(),
       created_at: task.created_at || new Date().toISOString(),
     };
 
+    const index = existing.findIndex((t) => t.id === task.id);
     if (index >= 0) {
-      existing[index] = updatedTask;
+      existing[index] = updated;
     } else {
-      existing.push(updatedTask);
+      existing.push(updated);
     }
 
+    // Persist single task to Supabase
     if (supabaseAdmin) {
       try {
-        await supabaseAdmin.from('project_tasks').upsert(updatedTask);
-      } catch {}
+        await supabaseAdmin.from('project_tasks').upsert(updated);
+      } catch (err: any) {
+        console.warn('[Er.NEXA taskStorage] Supabase upsertTask notice:', err.message);
+      }
     }
 
-    fs.writeFileSync(getLocalTaskPath(projectId), JSON.stringify(existing, null, 2));
-    return updatedTask;
+    await this.saveTasks(projectId, existing);
+    return updated;
   },
 
   async deleteTask(projectId: string, taskId: string): Promise<void> {
@@ -152,7 +188,6 @@ export const taskStorage = {
       } catch {}
     }
 
-    fs.writeFileSync(getLocalTaskPath(projectId), JSON.stringify(filtered, null, 2));
+    await this.saveTasks(projectId, filtered);
   },
 };
-

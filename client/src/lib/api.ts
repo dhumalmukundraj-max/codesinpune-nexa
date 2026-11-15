@@ -628,8 +628,35 @@ export async function fetchMessages(conversationId: string) {
   return res.json();
 }
 
-export async function sendChatMessage(conversationId: string, content: string) {
+export async function sendChatMessage(
+  conversationId: string,
+  content: string,
+  attachments?: File[]
+) {
   const headers = await getAuthHeaders();
+
+  if (attachments && attachments.length > 0) {
+    const formData = new FormData();
+    formData.append('content', content || '');
+    attachments.forEach((file) => {
+      formData.append('attachments', file);
+    });
+
+    const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || 'Failed to send message attachments');
+    }
+    return res.json();
+  }
+
   const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },

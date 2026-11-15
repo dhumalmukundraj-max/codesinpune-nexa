@@ -57,10 +57,29 @@ CREATE TABLE IF NOT EXISTS public.messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE NOT NULL,
   sender_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  content TEXT NOT NULL,
+  content TEXT DEFAULT '',
+  attachments JSONB DEFAULT '[]'::JSONB,
+  message_type TEXT DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'document', 'mixed')),
   metadata JSONB DEFAULT '{}'::JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure existing messages table has attachments and message_type columns
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.messages ALTER COLUMN content DROP NOT NULL;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::JSONB;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS message_type TEXT DEFAULT 'text';
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;
 
 -- Indexes for fast Messenger queries
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON public.messages(conversation_id, created_at ASC);
@@ -133,3 +152,22 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 END $$;
+
+-- 4. Supabase Storage Setup for Messenger Attachments (Images & Documents)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('messenger-attachments', 'messenger-attachments', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage RLS: Authenticated users can upload to messenger-attachments
+DROP POLICY IF EXISTS "Authenticated users can upload messenger attachments" ON storage.objects;
+CREATE POLICY "Authenticated users can upload messenger attachments"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (bucket_id = 'messenger-attachments');
+
+-- Storage RLS: Authenticated users can read messenger attachments
+DROP POLICY IF EXISTS "Authenticated users can read messenger attachments" ON storage.objects;
+CREATE POLICY "Authenticated users can read messenger attachments"
+  ON storage.objects FOR SELECT
+  TO authenticated
+  USING (bucket_id = 'messenger-attachments');

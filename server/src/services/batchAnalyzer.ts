@@ -87,7 +87,12 @@ IMPORTANT GROUNDING RULES:
 4. GENERATE SYNTACTICALLY VALID MERMAID DIAGRAMS:
    - "flowchartMermaid": Runtime workflow flowchart. Header must be "flowchart TD". Quote any node labels containing parentheses or spaces (e.g. A["User (Browser)"] --> B["API Gateway"]).
    - "blockDiagramMermaid": Architecture block diagram with subgraphs (e.g. subgraph Frontend, subgraph Backend, subgraph Database). Only include components verified by code evidence!
-5. CORE PROBLEM STATEMENT & COMPLETION CALCULATION:
+5. ACCURATE PROJECT ROADMAP & SEQUENCING:
+   - Construct a realistic development roadmap directly tied to solving "${projectName}"'s problem statement.
+   - Phases must represent real technical milestones (e.g. Core Domain Engine, Realtime Sync & Data Layer, Hardening & Security, Production Scale & Release).
+   - DO NOT mark already implemented functionality as planned/pending. Distinguish completed components from genuine missing items.
+   - Tasks must be actionable, naming specific modules or endpoints.
+6. CORE PROBLEM STATEMENT & COMPLETION CALCULATION:
    - Identify the project's PRIMARY PROBLEM STATEMENT and desired operational output (what is this software built to solve?).
    - Group the functionalities strictly into:
      * "existingFunctionalities": Features and modules currently built and working in the codebase that solve the problem statement.

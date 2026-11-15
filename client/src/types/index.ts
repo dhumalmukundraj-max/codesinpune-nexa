@@ -303,6 +303,17 @@ export interface RoadmapPhaseGroup {
 // Inbuilt Real-Time Messenger Types
 // ==========================================
 
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  category: 'image' | 'document';
+  url: string;
+  storage_path?: string;
+  thumbnail_url?: string;
+}
+
 export interface ConversationItem {
   id: string;
   otherParticipant: UserProfile;
@@ -310,6 +321,8 @@ export interface ConversationItem {
     content: string;
     sender_id: string;
     created_at: string;
+    message_type?: 'text' | 'image' | 'document' | 'mixed';
+    attachments_count?: number;
   };
   unreadCount: number;
   updated_at: string;
@@ -323,6 +336,10 @@ export interface ChatMessage {
   sender_avatar?: string;
   content: string;
   created_at: string;
+  message_type?: 'text' | 'image' | 'document' | 'mixed';
+  attachments?: MessageAttachment[];
+  metadata?: Record<string, any>;
+  isUploading?: boolean;
 }
 
 

@@ -715,10 +715,18 @@ export const IntelligentRoadmapSection: React.FC<IntelligentRoadmapSectionProps>
                     onChange={(e) => setEditingTask({ ...editingTask, phase: e.target.value as any })}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 focus:outline-none"
                   >
-                    <option value="Phase 1: Critical Stabilization">Phase 1: Critical Stabilization</option>
-                    <option value="Phase 2: Core Enhancement">Phase 2: Core Enhancement</option>
-                    <option value="Phase 3: Integration & Quality">Phase 3: Integration & Quality</option>
-                    <option value="Phase 4: Optimization & Scale">Phase 4: Optimization & Scale</option>
+                    {phases.length > 0 ? (
+                      phases.map((p) => (
+                        <option key={p.name} value={p.name}>{p.name}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Phase 1: Critical Stabilizations & Core Stubs">Phase 1: Critical Stabilizations & Core Stubs</option>
+                        <option value="Phase 2: Feature Completion & Integration">Phase 2: Feature Completion & Integration</option>
+                        <option value="Phase 3: Error Boundaries, Validation & Security">Phase 3: Error Boundaries, Validation & Security</option>
+                        <option value="Phase 4: Optimization, Documentation & Handover">Phase 4: Optimization, Documentation & Handover</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
