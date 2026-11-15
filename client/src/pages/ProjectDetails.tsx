@@ -594,7 +594,7 @@ export const ProjectDetails: React.FC = () => {
           {/* Tab 1: Summary */}
           {activeTab === 'summary' && (
             analysis?.summary ? (
-              <SummaryTab summary={analysis.summary} />
+              <SummaryTab summary={analysis.summary} projectName={project.name} />
             ) : (
               <div className="p-8 text-center text-stone-500 bg-white rounded-2xl border border-brand-border">
                 Project summary is being generated or repository was imported. Check GitHub Sync to trigger analysis.

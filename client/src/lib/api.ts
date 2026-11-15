@@ -591,15 +591,72 @@ export async function fetchPublicProfile(idOrUsername: string) {
 // ==========================================
 
 export async function fetchConversations() {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${API_BASE}/messages/conversations`, {
-    headers: { ...headers, 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to load conversations');
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE}/messages/conversations`, {
+      headers: { ...headers, 'Content-Type': 'application/json' },
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('[Er.NEXA api] API fetchConversations warning, attempting Supabase direct:', err);
   }
-  return res.json();
+
+  // Fallback directly to Supabase client if API call fails or server is restarting
+  if (supabase) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: participantRows } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id, role')
+          .eq('user_id', user.id);
+
+        if (participantRows && participantRows.length > 0) {
+          const convIds = participantRows.map((r: any) => r.conversation_id);
+          const { data: convRows } = await supabase
+            .from('conversations')
+            .select('*')
+            .in('id', convIds);
+
+          const { data: messages } = await supabase
+            .from('messages')
+            .select('id, conversation_id, sender_id, receiver_id, content, attachments, message_type, metadata, created_at')
+            .in('conversation_id', convIds)
+            .order('created_at', { ascending: false });
+
+          const conversations = (convRows || []).map((conv: any) => {
+            const lastMsg = (messages || []).find((m: any) => m.conversation_id === conv.id);
+            const isGroup = Boolean(conv.is_group);
+            const atts = lastMsg?.attachments || lastMsg?.metadata?.attachments || [];
+            return {
+              id: conv.id,
+              title: conv.title,
+              is_group: isGroup,
+              avatar_url: conv.avatar_url,
+              admin_id: conv.admin_id,
+              description: conv.description,
+              updated_at: conv.updated_at || conv.created_at,
+              unreadCount: 0,
+              lastMessage: lastMsg ? {
+                content: lastMsg.content || (atts.length > 0 ? `Shared ${atts.length} file(s)` : 'New message'),
+                sender_id: lastMsg.sender_id,
+                created_at: lastMsg.created_at,
+                message_type: lastMsg.message_type || 'text',
+                attachments_count: atts.length,
+              } : undefined,
+            };
+          });
+          return { success: true, conversations };
+        }
+      }
+    } catch (sbErr) {
+      console.warn('[Er.NEXA api] Direct Supabase fetchConversations fallback error:', sbErr);
+    }
+  }
+
+  throw new Error('Failed to load conversations');
 }
 
 export async function startConversation(recipientId?: string, usernameOrId?: string) {
@@ -617,27 +674,65 @@ export async function startConversation(recipientId?: string, usernameOrId?: str
 }
 
 export async function fetchMessages(conversationId: string) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/messages`, {
-    headers: { ...headers, 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to load messages');
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/messages`, {
+      headers: { ...headers, 'Content-Type': 'application/json' },
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('[Er.NEXA api] API fetchMessages warning, attempting Supabase direct:', err);
   }
-  return res.json();
+
+  // Direct Supabase client fallback
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('id, conversation_id, sender_id, receiver_id, content, attachments, message_type, metadata, created_at')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+        .limit(500);
+
+      if (!error && data) {
+        const messages = data.map((m: any) => {
+          const rawAttachments = m.attachments || m.metadata?.attachments || [];
+          return {
+            id: m.id,
+            conversation_id: m.conversation_id,
+            sender_id: m.sender_id,
+            receiver_id: m.receiver_id || undefined,
+            content: m.content || '',
+            message_type: m.message_type || (rawAttachments.length > 0 ? 'mixed' : 'text'),
+            attachments: rawAttachments,
+            metadata: m.metadata || {},
+            created_at: m.created_at,
+          };
+        });
+        return { success: true, messages };
+      }
+    } catch (sbErr) {
+      console.warn('[Er.NEXA api] Direct Supabase fetchMessages fallback error:', sbErr);
+    }
+  }
+
+  throw new Error('Failed to load messages');
 }
 
 export async function sendChatMessage(
   conversationId: string,
   content: string,
-  attachments?: File[]
+  attachments?: File[],
+  receiverId?: string
 ) {
   const headers = await getAuthHeaders();
 
   if (attachments && attachments.length > 0) {
     const formData = new FormData();
     formData.append('content', content || '');
+    if (receiverId) formData.append('receiverId', receiverId);
     attachments.forEach((file) => {
       formData.append('attachments', file);
     });
@@ -657,16 +752,60 @@ export async function sendChatMessage(
     return res.json();
   }
 
-  const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/messages`, {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
-  });
-  if (!res.ok) {
+  try {
+    const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, receiverId }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || err.error || 'Failed to send message');
+  } catch (apiErr: any) {
+    // If backend is sleeping/down, direct insert via Supabase client
+    if (supabase) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const now = new Date().toISOString();
+          const { data: inserted, error: sbInsertErr } = await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              sender_id: user.id,
+              receiver_id: receiverId || null,
+              content: content ? content.trim() : '',
+              message_type: 'text',
+              attachments: [],
+              metadata: {},
+              created_at: now,
+            })
+            .select()
+            .single();
+
+          if (!sbInsertErr && inserted) {
+            return {
+              success: true,
+              message: {
+                id: inserted.id,
+                conversation_id: inserted.conversation_id,
+                sender_id: inserted.sender_id,
+                receiver_id: inserted.receiver_id,
+                content: inserted.content,
+                message_type: 'text',
+                attachments: [],
+                metadata: {},
+                created_at: inserted.created_at,
+              },
+            };
+          }
+        }
+      } catch {}
+    }
+    throw apiErr;
   }
-  return res.json();
 }
 
 export async function createGroupConversation(

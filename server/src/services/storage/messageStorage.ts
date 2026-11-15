@@ -54,6 +54,7 @@ export interface MessageRecord {
   id: string;
   conversation_id: string;
   sender_id: string;
+  receiver_id?: string;
   sender_name?: string;
   sender_avatar?: string;
   content: string;
@@ -181,19 +182,7 @@ export const messageStorage = {
   async getOrCreateDirectConversation(userA: string, userB: string): Promise<ConversationRecord> {
     const state = readLocalMessenger();
 
-    // Check if direct conversation already exists in local state
-    const existing = state.conversations.find((c) =>
-      !c.is_group &&
-      c.participant_ids.length === 2 &&
-      c.participant_ids.includes(userA) &&
-      c.participant_ids.includes(userB)
-    );
-
-    if (existing) {
-      return existing;
-    }
-
-    // Check in Supabase if available
+    // 1. Check in Supabase first (PRIMARY store)
     if (supabaseAdmin) {
       try {
         const { data: userAConvs } = await supabaseAdmin
@@ -241,35 +230,56 @@ export const messageStorage = {
         }
 
         // Create new direct conversation in Supabase
+        const convId = crypto.randomUUID();
+        const now = new Date().toISOString();
         const { data: newConv } = await supabaseAdmin
           .from('conversations')
           .insert({
+            id: convId,
             is_group: false,
+            created_at: now,
+            updated_at: now,
           })
           .select()
-          .single();
+          .maybeSingle();
 
-        if (newConv) {
-          await supabaseAdmin.from('conversation_participants').insert([
-            { conversation_id: newConv.id, user_id: userA, role: 'member' },
-            { conversation_id: newConv.id, user_id: userB, role: 'member' },
-          ]);
+        const effectiveId = newConv?.id || convId;
+        await supabaseAdmin.from('conversation_participants').insert([
+          { conversation_id: effectiveId, user_id: userA, role: 'member' },
+          { conversation_id: effectiveId, user_id: userB, role: 'member' },
+        ]);
 
-          const conv: ConversationRecord = {
-            id: newConv.id,
-            is_group: false,
-            participant_ids: [userA, userB],
-            roles: { [userA]: 'member', [userB]: 'member' },
-            created_at: newConv.created_at,
-            updated_at: newConv.updated_at,
-          };
+        const conv: ConversationRecord = {
+          id: effectiveId,
+          is_group: false,
+          participant_ids: [userA, userB],
+          roles: { [userA]: 'member', [userB]: 'member' },
+          created_at: newConv?.created_at || now,
+          updated_at: newConv?.updated_at || now,
+        };
+        const existingIdx = state.conversations.findIndex((c) => c.id === conv.id);
+        if (existingIdx >= 0) {
+          state.conversations[existingIdx] = conv;
+        } else {
           state.conversations.push(conv);
-          writeLocalMessenger(state);
-          return conv;
         }
+        writeLocalMessenger(state);
+        return conv;
       } catch (err: any) {
-        console.warn('[Er.NEXA messageStorage] Supabase direct conv error:', err.message);
+        console.warn('[Er.NEXA messageStorage] Supabase direct conv lookup/create fallback:', err.message);
       }
+    }
+
+    // 2. Check if direct conversation already exists in local fallback state
+    const existing = state.conversations.find((c) =>
+      !c.is_group &&
+      c.participant_ids.length === 2 &&
+      c.participant_ids.includes(userA) &&
+      c.participant_ids.includes(userB)
+    );
+
+    if (existing) {
+      return existing;
     }
 
     // Local fallback creation
@@ -759,9 +769,38 @@ export const messageStorage = {
     }
 
     const lastRead = state.reads[`${conv.id}:${userId}`] || '1970-01-01';
-    const unreadCount = state.messages.filter(
+    let unreadCount = state.messages.filter(
       (m) => m.conversation_id === conv.id && m.sender_id !== userId && m.created_at > lastRead
     ).length;
+
+    // Fetch latest message and accurate unread count from Supabase if available
+    if (supabaseAdmin) {
+      try {
+        const { data: recentMsgs } = await supabaseAdmin
+          .from('messages')
+          .select('id, conversation_id, sender_id, receiver_id, content, attachments, message_type, metadata, created_at')
+          .eq('conversation_id', conv.id)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (recentMsgs && recentMsgs.length > 0) {
+          const latestMsg = recentMsgs[0];
+          const sProf = await profileStorage.getProfile(latestMsg.sender_id);
+          const atts = latestMsg.attachments || latestMsg.metadata?.attachments || [];
+          conv.last_message = {
+            content: latestMsg.content || (atts.length > 0 ? `Shared ${atts.length} file(s)` : 'New message'),
+            sender_id: latestMsg.sender_id,
+            sender_name: sProf.display_name || sProf.full_name || `@${sProf.username || 'user'}`,
+            created_at: latestMsg.created_at,
+            message_type: latestMsg.message_type || (atts.length > 0 ? 'mixed' : 'text'),
+            attachments_count: atts.length,
+          };
+          unreadCount = recentMsgs.filter(
+            (m: any) => m.sender_id !== userId && m.created_at > lastRead
+          ).length;
+        }
+      } catch {}
+    }
 
     if (conv.is_group) {
       const members: GroupMemberInfo[] = [];
@@ -807,113 +846,204 @@ export const messageStorage = {
    */
   async getUserConversations(userId: string): Promise<ConversationDetailView[]> {
     const state = readLocalMessenger();
+    const viewsMap = new Map<string, ConversationDetailView>();
 
-    // Sync with Supabase if available
+    // 1. Supabase as PRIMARY persistent database
     if (supabaseAdmin) {
       try {
-        const { data: userConvs } = await supabaseAdmin
+        const { data: userParticipantRows, error: pErr } = await supabaseAdmin
           .from('conversation_participants')
-          .select('conversation_id, role, conversations(*)')
+          .select('conversation_id, role')
           .eq('user_id', userId);
 
-        if (userConvs && userConvs.length > 0) {
-          const convIds = userConvs.map((uc: any) => uc.conversation_id);
-          const { data: allParticipants } = await supabaseAdmin
-            .from('conversation_participants')
-            .select('conversation_id, user_id, role')
-            .in('conversation_id', convIds);
+        if (!pErr && userParticipantRows && userParticipantRows.length > 0) {
+          const convIds = userParticipantRows.map((r: any) => r.conversation_id);
 
-          for (const uc of userConvs) {
-            const cData: any = Array.isArray((uc as any).conversations) ? (uc as any).conversations[0] : (uc as any).conversations;
-            if (!cData) continue;
-            const pRows = (allParticipants || []).filter((p: any) => p.conversation_id === cData.id);
-            const pIds = pRows.map((p: any) => p.user_id);
-            const roleMap: Record<string, 'admin' | 'member'> = {};
-            pRows.forEach((p: any) => {
-              roleMap[p.user_id] = p.role || 'member';
+          // Discrete resilient query for conversations (no problematic nested foreign key embeds)
+          const { data: convRows, error: cErr } = await supabaseAdmin
+            .from('conversations')
+            .select('id, title, is_group, avatar_url, admin_id, description, created_at, updated_at')
+            .in('id', convIds);
+
+          if (!cErr && convRows && convRows.length > 0) {
+            // Discrete query for all participants in these conversations
+            const { data: allParticipants } = await supabaseAdmin
+              .from('conversation_participants')
+              .select('conversation_id, user_id, role')
+              .in('conversation_id', convIds);
+
+            // Discrete query for recent messages
+            const { data: messagesData } = await supabaseAdmin
+              .from('messages')
+              .select('id, conversation_id, sender_id, receiver_id, content, attachments, message_type, metadata, created_at')
+              .in('conversation_id', convIds)
+              .order('created_at', { ascending: false });
+
+            const latestMsgByConv = new Map<string, any>();
+            const unreadByConv = new Map<string, number>();
+
+            if (messagesData) {
+              for (const m of messagesData) {
+                if (!latestMsgByConv.has(m.conversation_id)) {
+                  latestMsgByConv.set(m.conversation_id, m);
+                }
+                const lastRead = state.reads[`${m.conversation_id}:${userId}`] || '1970-01-01';
+                if (m.sender_id !== userId && m.created_at > lastRead) {
+                  unreadByConv.set(m.conversation_id, (unreadByConv.get(m.conversation_id) || 0) + 1);
+                }
+              }
+            }
+
+            const participantsByConv = new Map<string, Array<{ user_id: string; role: 'admin' | 'member' }>>();
+            (allParticipants || []).forEach((p: any) => {
+              const list = participantsByConv.get(p.conversation_id) || [];
+              list.push({ user_id: p.user_id, role: p.role || 'member' });
+              participantsByConv.set(p.conversation_id, list);
             });
 
-            const existingIdx = state.conversations.findIndex((c) => c.id === cData.id);
-            const convRecord: ConversationRecord = {
-              id: cData.id,
-              title: cData.title,
-              is_group: Boolean(cData.is_group),
-              avatar_url: cData.avatar_url,
-              admin_id: cData.admin_id,
-              description: cData.description,
-              participant_ids: pIds.length > 0 ? pIds : [userId],
-              roles: roleMap,
-              created_at: cData.created_at || new Date().toISOString(),
-              updated_at: cData.updated_at || new Date().toISOString(),
-              last_message: existingIdx >= 0 ? state.conversations[existingIdx].last_message : undefined,
-            };
+            for (const conv of convRows) {
+              const parts = participantsByConv.get(conv.id) || [{ user_id: userId, role: 'member' }];
+              const pIds = parts.map((p) => p.user_id);
+              const roleMap: Record<string, 'admin' | 'member'> = {};
+              parts.forEach((p) => { roleMap[p.user_id] = p.role; });
 
-            if (existingIdx >= 0) {
-              state.conversations[existingIdx] = {
-                ...state.conversations[existingIdx],
-                ...convRecord,
-                last_message: state.conversations[existingIdx].last_message,
+              const existingIdx = state.conversations.findIndex((c) => c.id === conv.id);
+              const convRecord: ConversationRecord = {
+                id: conv.id,
+                title: conv.title,
+                is_group: Boolean(conv.is_group),
+                avatar_url: conv.avatar_url,
+                admin_id: conv.admin_id,
+                description: conv.description,
+                participant_ids: pIds,
+                roles: roleMap,
+                created_at: conv.created_at || new Date().toISOString(),
+                updated_at: conv.updated_at || new Date().toISOString(),
               };
-            } else {
-              state.conversations.push(convRecord);
+
+              const rawLastMsg = latestMsgByConv.get(conv.id);
+              if (rawLastMsg) {
+                const senderProf = await profileStorage.getProfile(rawLastMsg.sender_id);
+                const senderName = senderProf.display_name || senderProf.full_name || `@${senderProf.username || 'user'}`;
+                const rawAttachments = rawLastMsg.attachments || rawLastMsg.metadata?.attachments || [];
+                const attCount = Array.isArray(rawAttachments) ? rawAttachments.length : 0;
+                convRecord.last_message = {
+                  content: rawLastMsg.content || (attCount > 0 ? `Shared ${attCount} file(s)` : 'New message'),
+                  sender_id: rawLastMsg.sender_id,
+                  sender_name: senderName,
+                  created_at: rawLastMsg.created_at,
+                  message_type: rawLastMsg.message_type || (attCount > 0 ? 'mixed' : 'text'),
+                  attachments_count: attCount,
+                };
+              }
+
+              if (existingIdx >= 0) {
+                state.conversations[existingIdx] = {
+                  ...state.conversations[existingIdx],
+                  ...convRecord,
+                  last_message: convRecord.last_message || state.conversations[existingIdx].last_message,
+                };
+              } else {
+                state.conversations.push(convRecord);
+              }
+
+              const unreadCount = unreadByConv.get(conv.id) || 0;
+
+              if (conv.is_group) {
+                const members: GroupMemberInfo[] = [];
+                for (const pid of pIds) {
+                  const prof = await profileStorage.getProfile(pid);
+                  members.push({
+                    user_id: pid,
+                    role: roleMap[pid] || (conv.admin_id === pid ? 'admin' : 'member'),
+                    profile: prof,
+                  });
+                }
+
+                viewsMap.set(conv.id, {
+                  id: conv.id,
+                  title: conv.title || 'Project Group',
+                  is_group: true,
+                  avatar_url: conv.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${conv.id}`,
+                  admin_id: conv.admin_id,
+                  description: conv.description,
+                  members,
+                  lastMessage: convRecord.last_message,
+                  unreadCount,
+                  updated_at: conv.updated_at || conv.created_at || new Date().toISOString(),
+                });
+              } else {
+                const otherId = pIds.find((id) => id !== userId) || userId;
+                const otherProfile = await profileStorage.getProfile(otherId);
+
+                viewsMap.set(conv.id, {
+                  id: conv.id,
+                  is_group: false,
+                  otherParticipant: otherProfile,
+                  lastMessage: convRecord.last_message,
+                  unreadCount,
+                  updated_at: conv.updated_at || conv.created_at || new Date().toISOString(),
+                });
+              }
             }
+            writeLocalMessenger(state);
           }
-          writeLocalMessenger(state);
         }
       } catch (err: any) {
-        console.warn('[Er.NEXA messageStorage] Supabase sync user conversations:', err.message);
+        console.warn('[Er.NEXA messageStorage] Supabase getUserConversations warning:', err.message);
       }
     }
 
+    // 2. Fallback merge with local state cache
     const userConvs = state.conversations.filter((c) => c.participant_ids.includes(userId));
-    const views: ConversationDetailView[] = [];
-
     for (const c of userConvs) {
-      const lastRead = state.reads[`${c.id}:${userId}`] || '1970-01-01';
-      const unreadCount = state.messages.filter(
-        (m) => m.conversation_id === c.id && m.sender_id !== userId && m.created_at > lastRead
-      ).length;
+      if (!viewsMap.has(c.id)) {
+        const lastRead = state.reads[`${c.id}:${userId}`] || '1970-01-01';
+        const unreadCount = state.messages.filter(
+          (m) => m.conversation_id === c.id && m.sender_id !== userId && m.created_at > lastRead
+        ).length;
 
-      if (c.is_group) {
-        const members: GroupMemberInfo[] = [];
-        for (const pid of c.participant_ids) {
-          const prof = await profileStorage.getProfile(pid);
-          const role = (c.roles && c.roles[pid]) || (c.admin_id === pid ? 'admin' : 'member');
-          members.push({
-            user_id: pid,
-            role,
-            profile: prof,
+        if (c.is_group) {
+          const members: GroupMemberInfo[] = [];
+          for (const pid of c.participant_ids) {
+            const prof = await profileStorage.getProfile(pid);
+            const role = (c.roles && c.roles[pid]) || (c.admin_id === pid ? 'admin' : 'member');
+            members.push({
+              user_id: pid,
+              role,
+              profile: prof,
+            });
+          }
+
+          viewsMap.set(c.id, {
+            id: c.id,
+            title: c.title || 'Project Group',
+            is_group: true,
+            avatar_url: c.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${c.id}`,
+            admin_id: c.admin_id,
+            description: c.description,
+            members,
+            lastMessage: c.last_message,
+            unreadCount,
+            updated_at: c.updated_at,
+          });
+        } else {
+          const otherId = c.participant_ids.find((id) => id !== userId) || userId;
+          const otherProfile = await profileStorage.getProfile(otherId);
+
+          viewsMap.set(c.id, {
+            id: c.id,
+            is_group: false,
+            otherParticipant: otherProfile,
+            lastMessage: c.last_message,
+            unreadCount,
+            updated_at: c.updated_at,
           });
         }
-
-        views.push({
-          id: c.id,
-          title: c.title || 'Project Group',
-          is_group: true,
-          avatar_url: c.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${c.id}`,
-          admin_id: c.admin_id,
-          description: c.description,
-          members,
-          lastMessage: c.last_message,
-          unreadCount,
-          updated_at: c.updated_at,
-        });
-      } else {
-        const otherId = c.participant_ids.find((id) => id !== userId) || userId;
-        const otherProfile = await profileStorage.getProfile(otherId);
-
-        views.push({
-          id: c.id,
-          is_group: false,
-          otherParticipant: otherProfile,
-          lastMessage: c.last_message,
-          unreadCount,
-          updated_at: c.updated_at,
-        });
       }
     }
 
-    // Sort by latest message / update
+    const views = Array.from(viewsMap.values());
     return views.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   },
 
@@ -935,15 +1065,21 @@ export const messageStorage = {
         if (convData) {
           const { data: pData } = await supabaseAdmin
             .from('conversation_participants')
-            .select('user_id')
+            .select('user_id, role')
             .eq('conversation_id', conversationId);
+          const pIds = (pData || []).map((p: any) => p.user_id);
+          const roleMap: Record<string, 'admin' | 'member'> = {};
+          (pData || []).forEach((p: any) => { roleMap[p.user_id] = p.role || 'member'; });
+
           conv = {
             id: convData.id,
             title: convData.title,
             is_group: Boolean(convData.is_group),
             avatar_url: convData.avatar_url,
             admin_id: convData.admin_id,
-            participant_ids: (pData || []).map((p: any) => p.user_id),
+            description: convData.description,
+            participant_ids: pIds,
+            roles: roleMap,
             created_at: convData.created_at,
             updated_at: convData.updated_at,
           };
@@ -964,15 +1100,15 @@ export const messageStorage = {
 
     let fetchedMessages: MessageRecord[] = [];
 
-    // Try Supabase first
+    // Query Supabase messages as PRIMARY store
     if (supabaseAdmin) {
       try {
         const { data, error } = await supabaseAdmin
           .from('messages')
-          .select('id, conversation_id, sender_id, content, attachments, message_type, metadata, created_at')
+          .select('id, conversation_id, sender_id, receiver_id, content, attachments, message_type, metadata, created_at')
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: true })
-          .limit(200);
+          .limit(500);
 
         if (data && data.length > 0 && !error) {
           fetchedMessages = data.map((m: any) => {
@@ -981,6 +1117,7 @@ export const messageStorage = {
               id: m.id,
               conversation_id: m.conversation_id,
               sender_id: m.sender_id,
+              receiver_id: m.receiver_id || undefined,
               content: m.content || '',
               message_type: m.message_type || (rawAttachments.length > 0 ? 'mixed' : 'text'),
               attachments: rawAttachments,
@@ -988,8 +1125,19 @@ export const messageStorage = {
               created_at: m.created_at,
             };
           });
+
+          // Sync into local state messages
+          for (const fm of fetchedMessages) {
+            const exists = state.messages.some((sm) => sm.id === fm.id);
+            if (!exists) {
+              state.messages.push(fm);
+            }
+          }
+          writeLocalMessenger(state);
         }
-      } catch {}
+      } catch (err: any) {
+        console.warn('[Er.NEXA messageStorage] Supabase getMessages warning:', err.message);
+      }
     }
 
     if (fetchedMessages.length === 0) {
@@ -1133,8 +1281,58 @@ export const messageStorage = {
     const state = readLocalMessenger();
     let conv = state.conversations.find((c) => c.id === conversationId);
 
+    // If conv not cached locally, look up from Supabase
+    if (!conv && supabaseAdmin) {
+      try {
+        const { data: convData } = await supabaseAdmin
+          .from('conversations')
+          .select('*')
+          .eq('id', conversationId)
+          .single();
+        if (convData) {
+          const { data: pData } = await supabaseAdmin
+            .from('conversation_participants')
+            .select('user_id, role')
+            .eq('conversation_id', conversationId);
+          const pIds = (pData || []).map((p: any) => p.user_id);
+          const roleMap: Record<string, 'admin' | 'member'> = {};
+          (pData || []).forEach((p: any) => { roleMap[p.user_id] = p.role || 'member'; });
+
+          conv = {
+            id: convData.id,
+            title: convData.title,
+            is_group: Boolean(convData.is_group),
+            avatar_url: convData.avatar_url,
+            admin_id: convData.admin_id,
+            description: convData.description,
+            participant_ids: pIds,
+            roles: roleMap,
+            created_at: convData.created_at,
+            updated_at: convData.updated_at,
+          };
+          state.conversations.push(conv);
+          writeLocalMessenger(state);
+        }
+      } catch {}
+    }
+
     if (conv && !conv.participant_ids.includes(senderId)) {
       throw new Error('You are not a participant in this conversation.');
+    }
+
+    // Determine receiver_id for direct 1-to-1 conversation
+    let receiverId: string | undefined = undefined;
+    if (conv && !conv.is_group) {
+      receiverId = conv.participant_ids.find((id) => id !== senderId);
+    } else if (!conv && supabaseAdmin) {
+      try {
+        const { data: pData } = await supabaseAdmin
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', conversationId);
+        const other = (pData || []).find((p: any) => p.user_id !== senderId);
+        if (other) receiverId = other.user_id;
+      } catch {}
     }
 
     const now = new Date().toISOString();
@@ -1164,6 +1362,7 @@ export const messageStorage = {
       id: messageId,
       conversation_id: conversationId,
       sender_id: senderId,
+      receiver_id: receiverId,
       sender_name: senderDisplayName,
       sender_avatar: senderProfile.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${senderId}`,
       content: content ? content.trim() : '',
@@ -1176,13 +1375,14 @@ export const messageStorage = {
       },
     };
 
-    // Save in Supabase
+    // Save in Supabase as PRIMARY store
     if (supabaseAdmin) {
       try {
         await supabaseAdmin.from('messages').insert({
           id: messageId,
           conversation_id: conversationId,
           sender_id: senderId,
+          receiver_id: receiverId || null,
           content: message.content,
           attachments: message.attachments,
           message_type: messageType,
@@ -1199,7 +1399,7 @@ export const messageStorage = {
       }
     }
 
-    // Save in local state
+    // Save in local state cache
     state.messages.push(message);
     if (conv) {
       conv.updated_at = now;

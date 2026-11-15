@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   ProjectSummary 
 } from '../../types';
@@ -17,32 +17,57 @@ import {
   PackageCheck,
   MessagesSquare,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Download,
+  RefreshCw,
+  FileDown,
+  Sparkles
 } from 'lucide-react';
+import { generateProjectSummaryPdf } from '../../lib/summaryPdfGenerator';
 
 interface SummaryTabProps {
   summary: ProjectSummary;
+  projectName?: string;
 }
 
-export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
-  const intro = summary.introduction || {};
+export const SummaryTab: React.FC<SummaryTabProps> = ({ summary, projectName }) => {
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
+  const intro = summary.introduction || ({} as any);
   const decisions = summary.decisions || [];
-  const techDocs = summary.technicalDocumentation || {};
+  const techDocs = summary.technicalDocumentation || ({} as any);
   const functionalities = summary.existingFunctionalities || [];
   const unfinished = summary.unfinishedTasks || [];
   const dependencies = summary.dependencies || [];
-  const discussions = summary.discussionsAndCommunications || {};
+  const discussions = summary.discussionsAndCommunications || ({} as any);
   const futurePlans = summary.futurePlansAndActions || [];
   const missingInfo = summary.missingOrContradictoryInformation || [];
 
+  const resolvedName = projectName || intro.name || 'Project Knowledge Base';
+
+  const handleDownloadPdf = () => {
+    setIsGeneratingPdf(true);
+    try {
+      generateProjectSummaryPdf(summary, resolvedName);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3500);
+    } catch (err: any) {
+      console.error('Failed to generate summary PDF:', err);
+      alert(`PDF generation failed: ${err.message || 'Please check project summary data.'}`);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* 1. Project Introduction & Fact Grounding */}
+      {/* 1. Project Introduction, Fact Grounding & PDF Action Bar */}
       <div className="bg-white rounded-2xl border border-brand-border p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-brand-border">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-brand-dark">{intro.name || 'Project Knowledge Base'}</h2>
+              <h2 className="text-xl font-bold text-brand-dark">{resolvedName}</h2>
               {intro.architectureStyle && (
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-brand-secondary/40 font-medium text-brand-dark">
                   {intro.architectureStyle}
@@ -52,17 +77,49 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
             {intro.tagline && <p className="text-xs text-brand-muted mt-1">{intro.tagline}</p>}
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            {intro.primaryLanguages?.map((lang, idx) => (
-              <span key={idx} className="text-xs px-2.5 py-1 rounded-lg bg-stone-100 font-mono text-stone-800 border border-stone-200">
-                {lang}
-              </span>
-            ))}
-            {intro.frameworks?.map((fw, idx) => (
-              <span key={idx} className="text-xs px-2.5 py-1 rounded-lg bg-red-50 text-brand-primary border border-red-100 font-medium">
-                {fw}
-              </span>
-            ))}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Clearly Visible "Download PDF" Button */}
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isGeneratingPdf}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm border ${
+                downloadSuccess
+                  ? 'bg-emerald-600 text-white border-emerald-700'
+                  : 'bg-[#C1121F] hover:bg-[#9B0E19] text-white border-[#A10E1A]'
+              }`}
+              title="Download the complete AI-generated project summary as a professional PDF"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Generating PDF...</span>
+                </>
+              ) : downloadSuccess ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>PDF Downloaded!</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Download PDF</span>
+                </>
+              )}
+            </button>
+
+            <div className="flex flex-wrap gap-1.5">
+              {intro.primaryLanguages?.map((lang: string, idx: number) => (
+                <span key={idx} className="text-xs px-2.5 py-1 rounded-lg bg-stone-100 font-mono text-stone-800 border border-stone-200">
+                  {lang}
+                </span>
+              ))}
+              {intro.frameworks?.map((fw: string, idx: number) => (
+                <span key={idx} className="text-xs px-2.5 py-1 rounded-lg bg-red-50 text-brand-primary border border-red-100 font-medium">
+                  {fw}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -466,6 +523,47 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ summary }) => {
           </ul>
         </div>
       )}
+
+      {/* 8. Download PDF Action Card */}
+      <div className="bg-gradient-to-r from-stone-900 to-stone-800 rounded-2xl p-5 sm:p-6 text-white shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="space-y-1 text-center sm:text-left">
+          <div className="flex items-center justify-center sm:justify-start gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#C1121F]"></span>
+            <h4 className="text-sm font-bold">Export Complete Project Knowledge Dossier</h4>
+          </div>
+          <p className="text-xs text-stone-300 max-w-xl">
+            Download the complete AI-generated summary as a professionally formatted PDF, including verified facts, decisions, technical specs, dependencies, and roadmap actions.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleDownloadPdf}
+          disabled={isGeneratingPdf}
+          className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm shrink-0 border ${
+            downloadSuccess
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500'
+              : 'bg-[#C1121F] hover:bg-[#9B0E19] text-white border-red-500/30'
+          }`}
+        >
+          {isGeneratingPdf ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span>Generating PDF...</span>
+            </>
+          ) : downloadSuccess ? (
+            <>
+              <CheckCircle2 className="w-4 h-4" />
+              <span>PDF Downloaded!</span>
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4" />
+              <span>Download PDF</span>
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 };

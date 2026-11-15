@@ -347,6 +347,7 @@ export interface ChatMessage {
   id: string;
   conversation_id: string;
   sender_id: string;
+  receiver_id?: string;
   sender_name?: string;
   sender_avatar?: string;
   content: string;

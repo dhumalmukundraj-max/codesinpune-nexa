@@ -44,6 +44,7 @@ import {
 } from '../lib/api';
 import { ConversationItem, ChatMessage, UserProfile, MessageAttachment, GroupMemberInfo } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -211,7 +212,81 @@ export const MessengerPage: React.FC = () => {
       .finally(() => setIsLoadingMessages(false));
   }, [activeConversationId]);
 
-  // Periodic polling for real-time updates (every 3 seconds)
+  // Instant real-time message delivery and sync via Supabase Realtime
+  useEffect(() => {
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel('ernexa-messenger-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const newMsg = payload.new as any;
+          if (!newMsg) return;
+
+          // If message is for the currently open conversation
+          if (activeConversationId && newMsg.conversation_id === activeConversationId) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+
+              let senderName = newMsg.sender_name;
+              let senderAvatar = newMsg.sender_avatar;
+
+              if (!senderName || !senderAvatar) {
+                const otherPart = activeConversationDetail?.otherParticipant;
+                if (newMsg.sender_id === user?.id || newMsg.sender_id === myProfile?.id) {
+                  senderName = myProfile?.display_name || myProfile?.full_name || 'Me';
+                  senderAvatar = myProfile?.avatar_url;
+                } else if (otherPart && otherPart.id === newMsg.sender_id) {
+                  senderName = otherPart.display_name || otherPart.full_name || `@${otherPart.username || 'engineer'}`;
+                  senderAvatar = otherPart.avatar_url;
+                } else if (activeConversationDetail?.members) {
+                  const m = activeConversationDetail.members.find((mem) => mem.user_id === newMsg.sender_id);
+                  if (m?.profile) {
+                    senderName = m.profile.display_name || m.profile.full_name || `@${m.profile.username || 'engineer'}`;
+                    senderAvatar = m.profile.avatar_url;
+                  }
+                }
+              }
+
+              const formatted: ChatMessage = {
+                id: newMsg.id,
+                conversation_id: newMsg.conversation_id,
+                sender_id: newMsg.sender_id,
+                receiver_id: newMsg.receiver_id,
+                sender_name: senderName || 'Engineer',
+                sender_avatar: senderAvatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${newMsg.sender_id}`,
+                content: newMsg.content || '',
+                message_type: newMsg.message_type || 'text',
+                attachments: newMsg.attachments || newMsg.metadata?.attachments || [],
+                metadata: newMsg.metadata || {},
+                created_at: newMsg.created_at,
+              };
+
+              return [...prev, formatted];
+            });
+            setTimeout(scrollToBottom, 100);
+          }
+
+          // Always refresh conversations list so sidebar preview & unread counts update in real-time
+          loadConversations(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [activeConversationId, user?.id, myProfile, activeConversationDetail]);
+
+  // Periodic polling for real-time updates (every 3 seconds backup)
   useEffect(() => {
     const interval = setInterval(() => {
       if (activeConversationId) {
@@ -380,10 +455,13 @@ export const MessengerPage: React.FC = () => {
       url: f.type.startsWith('image/') ? URL.createObjectURL(f) : '#',
     }));
 
+    const targetReceiverId = activeConversationDetail?.is_group ? undefined : activeConversationDetail?.otherParticipant?.id;
+
     const optimisticMsg: ChatMessage = {
       id: tempId,
       conversation_id: activeConversationId,
       sender_id: user?.id || myProfile?.id || 'me',
+      receiver_id: targetReceiverId,
       sender_name: myProfile?.display_name || myProfile?.full_name || 'Me',
       sender_avatar: myProfile?.avatar_url,
       content: text,
@@ -397,7 +475,7 @@ export const MessengerPage: React.FC = () => {
     setTimeout(scrollToBottom, 50);
 
     try {
-      const res = await sendChatMessage(activeConversationId, text, currentFiles);
+      const res = await sendChatMessage(activeConversationId, text, currentFiles, targetReceiverId);
       if (res.message) {
         setMessages((prev) => prev.map((m) => (m.id === tempId ? res.message : m)));
         loadConversations(true);

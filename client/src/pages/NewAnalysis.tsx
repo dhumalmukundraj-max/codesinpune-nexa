@@ -975,7 +975,10 @@ export const NewAnalysis: React.FC = () => {
 
           {/* Tab 1: Summary */}
           {activeTab === 'summary' && (
-            <SummaryTab summary={analysisResult.analysis.summary} />
+            <SummaryTab
+              summary={analysisResult.analysis.summary}
+              projectName={customName || analysisResult.analysis?.summary?.introduction?.name}
+            />
           )}
 
           {/* Tab 2: Flowchart */}

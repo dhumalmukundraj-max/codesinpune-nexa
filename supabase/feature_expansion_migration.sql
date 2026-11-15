@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS public.messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE NOT NULL,
   sender_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  receiver_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   content TEXT DEFAULT '',
   attachments JSONB DEFAULT '[]'::JSONB,
   message_type TEXT DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'document', 'mixed')),
@@ -94,11 +95,15 @@ CREATE TABLE IF NOT EXISTS public.messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Ensure existing messages table has attachments and message_type columns
+-- Ensure existing messages table has receiver_id, attachments and message_type columns
 DO $$
 BEGIN
   BEGIN
     ALTER TABLE public.messages ALTER COLUMN content DROP NOT NULL;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS receiver_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
   BEGIN
@@ -109,12 +114,32 @@ BEGIN
     ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS message_type TEXT DEFAULT 'text';
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
+  BEGIN
+    ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::JSONB;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
 END $$;
 
 -- Indexes for fast Messenger queries
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON public.messages(conversation_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON public.messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_receiver_id ON public.messages(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_participants_user ON public.conversation_participants(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_participants_conv ON public.conversation_participants(conversation_id);
+
+-- Helper function to check if current user is participant in a conversation (SECURITY DEFINER avoids RLS recursion)
+CREATE OR REPLACE FUNCTION public.is_conversation_participant(conv_id UUID, usr_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.conversation_participants
+    WHERE conversation_id = conv_id AND user_id = usr_id
+  );
+$$;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
@@ -125,10 +150,7 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Participants can view conversations" ON public.conversations;
 CREATE POLICY "Participants can view conversations" ON public.conversations
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.conversation_participants cp
-      WHERE cp.conversation_id = conversations.id AND cp.user_id = auth.uid()
-    )
+    public.is_conversation_participant(id, auth.uid())
   );
 
 DROP POLICY IF EXISTS "Authenticated users can create conversations" ON public.conversations;
@@ -138,21 +160,14 @@ CREATE POLICY "Authenticated users can create conversations" ON public.conversat
 DROP POLICY IF EXISTS "Participants can update conversations" ON public.conversations;
 CREATE POLICY "Participants can update conversations" ON public.conversations
   FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM public.conversation_participants cp
-      WHERE cp.conversation_id = conversations.id AND cp.user_id = auth.uid()
-    )
+    public.is_conversation_participant(id, auth.uid())
   );
 
 -- Conversation Participants RLS
 DROP POLICY IF EXISTS "Users can view participants of their conversations" ON public.conversation_participants;
 CREATE POLICY "Users can view participants of their conversations" ON public.conversation_participants
   FOR SELECT USING (
-    user_id = auth.uid() OR
-    EXISTS (
-      SELECT 1 FROM public.conversation_participants cp2
-      WHERE cp2.conversation_id = conversation_participants.conversation_id AND cp2.user_id = auth.uid()
-    )
+    user_id = auth.uid() OR public.is_conversation_participant(conversation_id, auth.uid())
   );
 
 DROP POLICY IF EXISTS "Users can add participants to conversations" ON public.conversation_participants;
@@ -162,18 +177,21 @@ CREATE POLICY "Users can add participants to conversations" ON public.conversati
 DROP POLICY IF EXISTS "Users can leave or admins can remove participants" ON public.conversation_participants;
 CREATE POLICY "Users can leave or admins can remove participants" ON public.conversation_participants
   FOR DELETE USING (
-    user_id = auth.uid() OR
-    EXISTS (
-      SELECT 1 FROM public.conversation_participants cp
-      WHERE cp.conversation_id = conversation_participants.conversation_id
-        AND cp.user_id = auth.uid()
-        AND cp.role = 'admin'
+    user_id = auth.uid() OR (
+      public.is_conversation_participant(conversation_id, auth.uid()) AND
+      EXISTS (
+        SELECT 1 FROM public.conversation_participants cp
+        WHERE cp.conversation_id = conversation_participants.conversation_id
+          AND cp.user_id = auth.uid()
+          AND cp.role = 'admin'
+      )
     )
   );
 
 DROP POLICY IF EXISTS "Admins can update participant roles" ON public.conversation_participants;
 CREATE POLICY "Admins can update participant roles" ON public.conversation_participants
   FOR UPDATE USING (
+    public.is_conversation_participant(conversation_id, auth.uid()) AND
     EXISTS (
       SELECT 1 FROM public.conversation_participants cp
       WHERE cp.conversation_id = conversation_participants.conversation_id
@@ -186,20 +204,16 @@ CREATE POLICY "Admins can update participant roles" ON public.conversation_parti
 DROP POLICY IF EXISTS "Participants can view messages" ON public.messages;
 CREATE POLICY "Participants can view messages" ON public.messages
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.conversation_participants cp
-      WHERE cp.conversation_id = messages.conversation_id AND cp.user_id = auth.uid()
-    )
+    sender_id = auth.uid() OR
+    receiver_id = auth.uid() OR
+    public.is_conversation_participant(conversation_id, auth.uid())
   );
 
 DROP POLICY IF EXISTS "Participants can send messages" ON public.messages;
 CREATE POLICY "Participants can send messages" ON public.messages
   FOR INSERT WITH CHECK (
     sender_id = auth.uid() AND
-    EXISTS (
-      SELECT 1 FROM public.conversation_participants cp
-      WHERE cp.conversation_id = messages.conversation_id AND cp.user_id = auth.uid()
-    )
+    public.is_conversation_participant(conversation_id, auth.uid())
   );
 
 -- Enable Supabase Realtime for messages, conversations, and participants
