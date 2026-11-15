@@ -1,6 +1,13 @@
 import { supabase } from './supabase';
 
-const API_BASE = '/api';
+const getApiBase = (): string => {
+  const envUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+  if (!envUrl) return '/api';
+  const clean = envUrl.replace(/\/+$/, '');
+  return clean.endsWith('/api') ? clean : `${clean}/api`;
+};
+
+const API_BASE = getApiBase();
 
 export async function getAuthHeaders(projectId?: string, customProjectToken?: string): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
@@ -538,8 +545,19 @@ export async function updateMyProfile(payload: {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || 'Failed to update profile');
+    let errorDetail = 'Failed to update profile';
+    try {
+      const err = await res.json();
+      errorDetail = err.message || err.error || errorDetail;
+    } catch {
+      const text = await res.text().catch(() => '');
+      if (text) {
+        errorDetail = `Server returned ${res.status}: ${text.slice(0, 120)}`;
+      } else {
+        errorDetail = `Failed to update profile (${res.status} ${res.statusText})`;
+      }
+    }
+    throw new Error(errorDetail);
   }
   return res.json();
 }

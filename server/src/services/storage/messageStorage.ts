@@ -1,21 +1,30 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import os from 'os';
 import crypto from 'crypto';
 import { supabaseAdmin } from '../../config/index.js';
 import { profileStorage, UserProfileRecord } from './profileStorage.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DATA_DIR = path.resolve(__dirname, '../../../../server/data/round3');
+function getDataDir(): string {
+  const candidates = [
+    path.resolve(process.cwd(), 'data/round3'),
+    path.resolve(process.cwd(), 'server/data/round3'),
+    path.join(os.tmpdir(), 'ernexa_round3'),
+  ];
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  for (const candidate of candidates) {
+    try {
+      if (!fs.existsSync(candidate)) {
+        fs.mkdirSync(candidate, { recursive: true });
+      }
+      const testFile = path.join(candidate, '.write_test_msg');
+      fs.writeFileSync(testFile, 'ok', 'utf-8');
+      fs.unlinkSync(testFile);
+      return candidate;
+    } catch {}
   }
+  return '';
 }
-
-const LOCAL_MESSAGES_FILE = path.join(DATA_DIR, 'messenger_data.json');
 
 export interface MessageRecord {
   id: string;
@@ -59,19 +68,39 @@ interface LocalMessengerState {
   reads: Record<string, string>; // `${convId}:${userId}` -> ISO timestamp
 }
 
+let inMemoryMessenger: LocalMessengerState = {
+  conversations: [],
+  messages: [],
+  reads: {},
+};
+
 function readLocalMessenger(): LocalMessengerState {
-  ensureDataDir();
-  if (fs.existsSync(LOCAL_MESSAGES_FILE)) {
-    try {
-      return JSON.parse(fs.readFileSync(LOCAL_MESSAGES_FILE, 'utf-8'));
-    } catch {}
-  }
-  return { conversations: [], messages: [], reads: {} };
+  try {
+    const dir = getDataDir();
+    if (dir) {
+      const file = path.join(dir, 'messenger_data.json');
+      if (fs.existsSync(file)) {
+        const raw = fs.readFileSync(file, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.conversations)) {
+          inMemoryMessenger = parsed;
+          return parsed;
+        }
+      }
+    }
+  } catch {}
+  return inMemoryMessenger;
 }
 
 function writeLocalMessenger(state: LocalMessengerState) {
-  ensureDataDir();
-  fs.writeFileSync(LOCAL_MESSAGES_FILE, JSON.stringify(state, null, 2), 'utf-8');
+  inMemoryMessenger = state;
+  try {
+    const dir = getDataDir();
+    if (dir) {
+      const file = path.join(dir, 'messenger_data.json');
+      fs.writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8');
+    }
+  } catch {}
 }
 
 export const messageStorage = {

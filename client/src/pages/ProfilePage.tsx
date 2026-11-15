@@ -83,24 +83,59 @@ export const ProfilePage: React.FC = () => {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage('Image size must be less than 5MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMessage('Image size must be less than 10MB.');
       return;
     }
 
-    // Convert to Base64 data URL for preview and storage
+    // Read and compress image with canvas for fast uploads and minimal payload size
     const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setAvatarUrl(reader.result);
-      }
+    reader.onload = (event) => {
+      const rawUrl = event.target?.result;
+      if (typeof rawUrl !== 'string') return;
+
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const maxDim = 256;
+          let w = img.width;
+          let h = img.height;
+
+          if (w > h) {
+            if (w > maxDim) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            }
+          } else {
+            if (h > maxDim) {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL('image/jpeg', 0.85);
+            setAvatarUrl(compressed);
+          } else {
+            setAvatarUrl(rawUrl);
+          }
+        } catch {
+          setAvatarUrl(rawUrl);
+        }
+      };
+      img.src = rawUrl;
     };
     reader.readAsDataURL(file);
   };
 
   const handleRemoveAvatar = () => {
     const seed = profile?.id || 'default';
-    setAvatarUrl(`https://api.dicebear.com/7.x/identicon/svg?seed=${seed}`);
+    setAvatarUrl(`https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(seed)}`);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -111,22 +146,38 @@ export const ProfilePage: React.FC = () => {
 
     // Validate username
     const cleanUsername = username.trim().toLowerCase();
-    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(cleanUsername)) {
-      setErrorMessage('Username must be 3-30 characters (letters, numbers, underscores, periods).');
+    if (!cleanUsername) {
+      setErrorMessage('Username cannot be empty.');
       setIsSaving(false);
       return;
     }
 
+    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(cleanUsername)) {
+      setErrorMessage('Username must be 3-30 characters (letters, numbers, underscores, periods, hyphens).');
+      setIsSaving(false);
+      return;
+    }
+
+    const cleanDisplayName = displayName.trim() || cleanUsername;
+    const cleanPublicId = publicId.trim() || (profile?.id ? `NX-${profile.id.slice(0, 8).toUpperCase()}` : 'NX-VERIFIED');
+
     try {
       const res = await updateMyProfile({
-        display_name: displayName.trim(),
+        display_name: cleanDisplayName,
         username: cleanUsername,
         bio: bio.trim(),
-        public_id: publicId.trim(),
+        public_id: cleanPublicId,
         avatar_url: avatarUrl,
       });
 
-      setProfile(res.profile);
+      if (res.profile) {
+        setProfile(res.profile);
+        setDisplayName(res.profile.display_name || res.profile.full_name || cleanDisplayName);
+        setUsername(res.profile.username || cleanUsername);
+        setBio(res.profile.bio || '');
+        setPublicId(res.profile.public_id || cleanPublicId);
+        setAvatarUrl(res.profile.avatar_url || avatarUrl);
+      }
       setIsEditing(false);
       setSuccessMessage('Your profile was updated successfully.');
       setTimeout(() => setSuccessMessage(null), 3000);

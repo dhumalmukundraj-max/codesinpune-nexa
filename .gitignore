@@ -25,6 +25,8 @@ out/
 # 4. Uploads & Temporary File Processing
 uploads/
 server/uploads/
+server/data/
+data/
 temp/
 tmp/
 *.zip

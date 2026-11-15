@@ -1,19 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import os from 'os';
 import { supabaseAdmin } from '../../config/index.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DATA_DIR = path.resolve(__dirname, '../../../../server/data/round3');
-
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
-
-const LOCAL_PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
 
 export interface UserProfileRecord {
   id: string;
@@ -29,86 +17,176 @@ export interface UserProfileRecord {
   updated_at?: string;
 }
 
-function readLocalProfiles(): Map<string, UserProfileRecord> {
-  ensureDataDir();
-  const map = new Map<string, UserProfileRecord>();
-  if (fs.existsSync(LOCAL_PROFILES_FILE)) {
+// In-memory cache ensures profiles are always available even if disk is read-only
+const inMemoryProfiles = new Map<string, UserProfileRecord>();
+
+/**
+ * Safely resolves a writable data directory across local dev, Render, and serverless containers.
+ */
+function getDataDir(): string {
+  const candidates = [
+    path.resolve(process.cwd(), 'data/round3'),
+    path.resolve(process.cwd(), 'server/data/round3'),
+    path.join(os.tmpdir(), 'ernexa_round3'),
+  ];
+
+  for (const candidate of candidates) {
     try {
-      const data = JSON.parse(fs.readFileSync(LOCAL_PROFILES_FILE, 'utf-8'));
-      if (Array.isArray(data)) {
-        data.forEach((p) => map.set(p.id, p));
+      if (!fs.existsSync(candidate)) {
+        fs.mkdirSync(candidate, { recursive: true });
       }
-    } catch {}
+      // Test write permission
+      const testFile = path.join(candidate, '.write_test');
+      fs.writeFileSync(testFile, 'ok', 'utf-8');
+      fs.unlinkSync(testFile);
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+  return '';
+}
+
+function readLocalProfiles(): Map<string, UserProfileRecord> {
+  const map = new Map<string, UserProfileRecord>(inMemoryProfiles);
+  try {
+    const dir = getDataDir();
+    if (dir) {
+      const file = path.join(dir, 'profiles.json');
+      if (fs.existsSync(file)) {
+        const raw = fs.readFileSync(file, 'utf-8');
+        const data = JSON.parse(raw);
+        if (Array.isArray(data)) {
+          data.forEach((p) => {
+            if (p && p.id) {
+              map.set(p.id, p);
+              inMemoryProfiles.set(p.id, p);
+            }
+          });
+        }
+      }
+    }
+  } catch (err) {
+    // Non-fatal: in-memory map will be used
   }
   return map;
 }
 
 function writeLocalProfiles(map: Map<string, UserProfileRecord>) {
-  ensureDataDir();
-  fs.writeFileSync(LOCAL_PROFILES_FILE, JSON.stringify(Array.from(map.values()), null, 2), 'utf-8');
+  for (const [k, v] of map.entries()) {
+    inMemoryProfiles.set(k, v);
+  }
+  try {
+    const dir = getDataDir();
+    if (dir) {
+      const file = path.join(dir, 'profiles.json');
+      fs.writeFileSync(file, JSON.stringify(Array.from(map.values()), null, 2), 'utf-8');
+    }
+  } catch (err) {
+    // Non-fatal: write to disk failed, in-memory state preserved
+  }
 }
 
 export const profileStorage = {
   /**
-   * Retrieves profile by user ID or creates a baseline profile if not yet existing
+   * Retrieves profile by user ID or creates a baseline profile if not yet existing.
+   * Merges data from Supabase Auth user_metadata, public.profiles table, and local memory.
    */
   async getProfile(userId: string, email?: string, fullName?: string): Promise<UserProfileRecord> {
     const localMap = readLocalProfiles();
 
-    // 1. Try Supabase
+    let mergedProfile: UserProfileRecord = localMap.get(userId) || {
+      id: userId,
+      email: email || '',
+      full_name: fullName || '',
+      display_name: fullName || '',
+      username: '',
+      bio: '',
+      public_id: `NX-${userId.slice(0, 8).toUpperCase()}`,
+      avatar_url: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(userId)}`,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // 1. Fetch from Supabase Auth user_metadata (guaranteed to persist without table schema changes)
+    if (supabaseAdmin) {
+      try {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+        if (authUser?.user) {
+          const meta = authUser.user.user_metadata || {};
+          if (authUser.user.email) mergedProfile.email = authUser.user.email;
+          if (meta.display_name) mergedProfile.display_name = meta.display_name;
+          if (meta.full_name && !mergedProfile.display_name) mergedProfile.display_name = meta.full_name;
+          if (meta.username) mergedProfile.username = meta.username;
+          if (meta.bio) mergedProfile.bio = meta.bio;
+          if (meta.public_id) mergedProfile.public_id = meta.public_id;
+          if (meta.avatar_url) mergedProfile.avatar_url = meta.avatar_url;
+        }
+      } catch {
+        // Service role auth admin lookup failed or not permitted
+      }
+    }
+
+    // 2. Fetch from public.profiles table in Supabase
     if (supabaseAdmin) {
       try {
         const { data, error } = await supabaseAdmin
           .from('profiles')
           .select('*')
           .eq('id', userId)
-          .single();
+          .maybeSingle();
 
         if (data && !error) {
-          // Sync to local fallback
-          localMap.set(userId, data);
-          writeLocalProfiles(localMap);
-          return data;
+          mergedProfile = {
+            ...mergedProfile,
+            ...data,
+            display_name: data.display_name || mergedProfile.display_name || data.full_name,
+            username: data.username || mergedProfile.username,
+            bio: data.bio !== undefined && data.bio !== null ? data.bio : mergedProfile.bio,
+            public_id: data.public_id || mergedProfile.public_id,
+            avatar_url: data.avatar_url || mergedProfile.avatar_url,
+          };
         }
-      } catch (err) {
-        // Fallback to local
+      } catch {
+        // Query failed
       }
     }
 
-    // 2. Check local fallback
-    if (localMap.has(userId)) {
-      return localMap.get(userId)!;
+    // 3. Ensure defaults for essential fields
+    if (!mergedProfile.username) {
+      const emailPrefix = (mergedProfile.email ? mergedProfile.email.split('@')[0] : `user_${userId.slice(0, 6)}`)
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_');
+      mergedProfile.username = emailPrefix;
     }
 
-    // 3. Create default profile if user exists
-    const defaultUsername = (email ? email.split('@')[0] : `user_${userId.slice(0, 6)}`)
-      .toLowerCase()
-      .replace(/[^a-z0-9_]/g, '_');
-    
-    const newProfile: UserProfileRecord = {
-      id: userId,
-      email: email || '',
-      full_name: fullName || defaultUsername,
-      display_name: fullName || defaultUsername,
-      username: defaultUsername,
-      public_id: `NX-${userId.slice(0, 8).toUpperCase()}`,
-      bio: 'Software engineer & architectural explorer on Er.NEXA.',
-      avatar_url: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(userId)}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    if (!mergedProfile.display_name) {
+      mergedProfile.display_name = mergedProfile.full_name || mergedProfile.username;
+    }
 
-    await this.upsertProfile(newProfile);
-    return newProfile;
+    if (!mergedProfile.public_id) {
+      mergedProfile.public_id = `NX-${userId.slice(0, 8).toUpperCase()}`;
+    }
+
+    if (!mergedProfile.avatar_url) {
+      mergedProfile.avatar_url = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(userId)}`;
+    }
+
+    // Sync to local/memory cache
+    localMap.set(userId, mergedProfile);
+    writeLocalProfiles(localMap);
+
+    return mergedProfile;
   },
 
   /**
-   * Saves or updates a profile, checking username uniqueness
+   * Saves or updates a profile, checking username uniqueness and persisting to Supabase
+   * with automatic fallback for missing table columns.
    */
   async upsertProfile(profile: UserProfileRecord): Promise<UserProfileRecord> {
     const localMap = readLocalProfiles();
 
-    // Validate username uniqueness across other users
+    // 1. Validate username uniqueness across other local profiles
     if (profile.username) {
       const lower = profile.username.toLowerCase();
       for (const [uid, p] of localMap.entries()) {
@@ -118,39 +196,95 @@ export const profileStorage = {
       }
     }
 
+    // 2. Ensure email is populated (profiles table has NOT NULL constraint on email)
+    if (!profile.email && supabaseAdmin) {
+      try {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(profile.id);
+        if (authUser?.user?.email) {
+          profile.email = authUser.user.email;
+        }
+      } catch {}
+    }
+    if (!profile.email) {
+      profile.email = `${profile.username || 'user'}@ernexa.io`;
+    }
+
     profile.updated_at = new Date().toISOString();
 
-    // Save in Supabase
+    // 3. Save metadata into Supabase Auth user_metadata (guaranteed to persist independently)
     if (supabaseAdmin) {
       try {
-        const { error } = await supabaseAdmin
-          .from('profiles')
-          .upsert({
-            id: profile.id,
-            email: profile.email,
-            full_name: profile.full_name || profile.display_name,
+        await supabaseAdmin.auth.admin.updateUserById(profile.id, {
+          user_metadata: {
+            full_name: profile.display_name || profile.full_name,
             display_name: profile.display_name || profile.full_name,
             username: profile.username,
             bio: profile.bio,
             public_id: profile.public_id,
             avatar_url: profile.avatar_url,
-            updated_at: profile.updated_at,
-          });
+          },
+        });
+      } catch (authErr: any) {
+        // Non-fatal if service role not permitted
+      }
+    }
 
-        if (error && error.code !== 'PGRST205') {
-          // If error is unique constraint violation
+    // 4. Save into public.profiles table in Supabase
+    if (supabaseAdmin) {
+      try {
+        const extendedPayload = {
+          id: profile.id,
+          email: profile.email,
+          full_name: profile.full_name || profile.display_name,
+          display_name: profile.display_name || profile.full_name,
+          username: profile.username,
+          bio: profile.bio,
+          public_id: profile.public_id,
+          avatar_url: profile.avatar_url,
+          updated_at: profile.updated_at,
+        };
+
+        const { error } = await supabaseAdmin
+          .from('profiles')
+          .upsert(extendedPayload);
+
+        if (error) {
           if (error.code === '23505') {
             throw new Error(`Username "@${profile.username}" is already taken.`);
+          }
+
+          // If extended columns are missing from table schema cache (PGRST204, 42703),
+          // gracefully fall back to updating the known standard columns.
+          const isColumnMissing =
+            error.code === 'PGRST204' ||
+            error.code === '42703' ||
+            (error.message && (error.message.includes('column') || error.message.includes('schema cache')));
+
+          if (isColumnMissing) {
+            console.warn('[Er.NEXA profileStorage] Extended columns not present in public.profiles. Using standard columns fallback.');
+            const basePayload = {
+              id: profile.id,
+              email: profile.email,
+              full_name: profile.display_name || profile.full_name,
+              avatar_url: profile.avatar_url,
+              updated_at: profile.updated_at,
+            };
+            const { error: baseError } = await supabaseAdmin.from('profiles').upsert(basePayload);
+            if (baseError && baseError.code === '23505') {
+              throw new Error(`Profile record already exists for this ID.`);
+            }
           }
         }
       } catch (err: any) {
         if (err.message && err.message.includes('already taken')) throw err;
+        console.warn('[Er.NEXA profileStorage] Supabase upsert non-fatal notice:', err.message);
       }
     }
 
-    // Save in local fallback
+    // 5. Always persist to local and in-memory cache
     localMap.set(profile.id, profile);
     writeLocalProfiles(localMap);
+
     return profile;
   },
 
@@ -162,7 +296,7 @@ export const profileStorage = {
     const localMap = readLocalProfiles();
     const results: UserProfileRecord[] = [];
 
-    // Search in local
+    // Search in local map
     for (const p of localMap.values()) {
       if (excludeUserId && p.id === excludeUserId) continue;
 
@@ -180,19 +314,41 @@ export const profileStorage = {
     // Try Supabase if available
     if (supabaseAdmin && results.length < limit) {
       try {
-        const { data } = await supabaseAdmin
+        // Try extended search first
+        const { data, error } = await supabaseAdmin
           .from('profiles')
           .select('id, email, full_name, display_name, username, bio, public_id, avatar_url, created_at')
           .or(`username.ilike.%${q}%,display_name.ilike.%${q}%,public_id.ilike.%${q}%`)
           .limit(limit);
 
-        if (data) {
+        if (data && !error) {
           data.forEach((p: any) => {
             if (excludeUserId && p.id === excludeUserId) return;
             if (!results.some((r) => r.id === p.id)) {
               results.push(p);
             }
           });
+        } else if (error) {
+          // Fallback to searching standard columns
+          const { data: baseData } = await supabaseAdmin
+            .from('profiles')
+            .select('id, email, full_name, avatar_url, created_at')
+            .or(`full_name.ilike.%${q}%,email.ilike.%${q}%`)
+            .limit(limit);
+
+          if (baseData) {
+            baseData.forEach((p: any) => {
+              if (excludeUserId && p.id === excludeUserId) return;
+              if (!results.some((r) => r.id === p.id)) {
+                results.push({
+                  ...p,
+                  display_name: p.full_name,
+                  username: (p.email ? p.email.split('@')[0] : p.id.slice(0, 8)).toLowerCase(),
+                  public_id: `NX-${p.id.slice(0, 8).toUpperCase()}`,
+                });
+              }
+            });
+          }
         }
       } catch {}
     }
@@ -207,10 +363,10 @@ export const profileStorage = {
     const localMap = readLocalProfiles();
     const term = idOrUsername.toLowerCase();
 
-    // Check by ID
+    // Check by ID in local map
     if (localMap.has(idOrUsername)) return localMap.get(idOrUsername)!;
 
-    // Check by username or public ID
+    // Check by username or public ID in local map
     for (const p of localMap.values()) {
       if (p.username && p.username.toLowerCase() === term) return p;
       if (p.public_id && p.public_id.toLowerCase() === term) return p;
@@ -218,13 +374,24 @@ export const profileStorage = {
 
     if (supabaseAdmin) {
       try {
-        const { data } = await supabaseAdmin
+        const { data, error } = await supabaseAdmin
           .from('profiles')
           .select('*')
           .or(`id.eq.${idOrUsername},username.ilike.${idOrUsername},public_id.eq.${idOrUsername}`)
-          .single();
+          .maybeSingle();
 
-        if (data) return data;
+        if (data && !error) return data;
+
+        // Fallback: search by id only if column error occurred
+        if (error) {
+          const { data: byId } = await supabaseAdmin
+            .from('profiles')
+            .select('*')
+            .eq('id', idOrUsername)
+            .maybeSingle();
+
+          if (byId) return byId;
+        }
       } catch {}
     }
 
