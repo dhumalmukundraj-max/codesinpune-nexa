@@ -9,10 +9,10 @@
   "webhook_secret": "ff240bd41e2aa8163e4f55c3acd5a72d",
   "webhook_id": null,
   "sync_interval": "1h",
-  "last_synced_at": "2026-11-14T18:39:58.642+00:00",
+  "last_synced_at": "2026-11-15T09:45:03.596+00:00",
   "last_commit_sha": "422d3fcce9c394fb8f486ced913692047f908fbd",
-  "status": "connected",
+  "status": "up_to_date",
   "last_error": null,
   "created_at": "2026-11-14T18:39:58.642+00:00",
-  "updated_at": "2026-11-14T18:39:58.642+00:00"
+  "updated_at": "2026-11-15T09:45:03.596+00:00"
 }

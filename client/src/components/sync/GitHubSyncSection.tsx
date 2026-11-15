@@ -59,6 +59,7 @@ export const GitHubSyncSection: React.FC<GitHubSyncSectionProps> = ({
   const [copiedWebhookUrl, setCopiedWebhookUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [showAddRepoForm, setShowAddRepoForm] = useState(Boolean(sourceType === 'github' || repositoryUrl));
 
   // Generate random webhook secret if empty
   useEffect(() => {
@@ -551,17 +552,59 @@ export const GitHubSyncSection: React.FC<GitHubSyncSectionProps> = ({
             )}
           </div>
         </>
-      ) : (
-        /* DISCONNECTED / CONNECT FORM */
-        <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8 shadow-sm max-w-2xl mx-auto">
-          <div className="text-center max-w-md mx-auto mb-6">
-            <div className="w-12 h-12 bg-red-50 text-[#C1121F] rounded-2xl flex items-center justify-center mx-auto mb-3 border border-red-100">
-              <GitBranch className="w-6 h-6" />
+      ) : !showAddRepoForm ? (
+        /* SCENARIO B: DISABLED BY DEFAULT FOR ZIP/FOLDER/LOCAL PATH */
+        <div className="bg-white border border-stone-200 rounded-3xl p-8 sm:p-10 shadow-sm max-w-2xl mx-auto text-center space-y-5">
+          <div className="w-14 h-14 bg-stone-100 text-stone-500 rounded-3xl flex items-center justify-center mx-auto border border-stone-200 shadow-inner">
+            <GitBranch className="w-7 h-7" />
+          </div>
+
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 text-stone-700 text-[11px] font-bold uppercase tracking-wider">
+              <span>Continuous Sync Eligibility Notice</span>
             </div>
-            <h3 className="text-xl font-bold text-stone-900">Connect GitHub Repository</h3>
-            <p className="text-xs text-stone-600 mt-1">
-              Associate "{projectName}" with its GitHub repository to unlock continuous incremental AI analysis, real-time webhooks, and automatic knowledge synchronization.
+            <h3 className="text-xl font-bold text-stone-900">
+              GitHub Synchronization Unavailable
+            </h3>
+            <p className="text-xs text-stone-600 max-w-md mx-auto leading-relaxed">
+              This project was initially analyzed using <strong className="text-stone-800 uppercase">{sourceType || 'folder'} upload</strong>. Continuous synchronization and webhook event detection are only available when a GitHub repository is connected.
             </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowAddRepoForm(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-[#C1121F] hover:bg-[#9B0E19] text-white text-xs font-bold rounded-2xl shadow-md transition active:scale-95"
+            >
+              <GitBranch className="w-4 h-4" />
+              <span>+ Add GitHub Repository URL</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* CONNECT FORM */
+        <div className="bg-white border border-stone-200 rounded-3xl p-6 sm:p-8 shadow-sm max-w-2xl mx-auto">
+          <div className="flex items-center justify-between pb-4 mb-4 border-b border-stone-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-50 text-[#C1121F] rounded-2xl flex items-center justify-center border border-red-100">
+                <GitBranch className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-stone-900">Connect GitHub Repository</h3>
+                <p className="text-xs text-stone-500">Associate with "{projectName}"</p>
+              </div>
+            </div>
+
+            {sourceType !== 'github' && (
+              <button
+                type="button"
+                onClick={() => setShowAddRepoForm(false)}
+                className="text-stone-400 hover:text-stone-700 text-xs font-semibold px-2 py-1 rounded-lg"
+              >
+                Cancel
+              </button>
+            )}
           </div>
 
           <form onSubmit={handleConnect} className="space-y-4">

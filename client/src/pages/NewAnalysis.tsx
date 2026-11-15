@@ -12,6 +12,7 @@ import {
   Lock, 
   RefreshCw, 
   ArrowRight,
+  ArrowLeft,
   Eye,
   Layers,
   Save,
@@ -433,6 +434,10 @@ export const NewAnalysis: React.FC = () => {
         frameworks: analysisResult.project.frameworks,
         sourceType: mode,
         repositoryUrl: mode === 'github' ? githubUrl : undefined,
+        originalFilename: mode === 'zip' && zipFile ? zipFile.name : undefined,
+        originalFolderName: mode === 'folder' && folderFiles.length > 0 ? (folderFiles[0]?.path?.split('/')[0] || customName) : undefined,
+        originalLocalPath: mode === 'desktop' ? localPath : undefined,
+        analysisMethod: mode === 'zip' ? 'zip_upload' : mode === 'folder' ? 'folder_upload' : mode === 'desktop' ? 'local_path' : 'github_repo',
         files: analysisResult.project.files,
       };
 
@@ -450,6 +455,22 @@ export const NewAnalysis: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
+      {/* Back Button */}
+      <button
+        type="button"
+        onClick={() => {
+          if (analysisResult && !savedSuccess) {
+            if (!window.confirm('You have unsaved analysis results. Are you sure you want to leave?')) return;
+          }
+          if (window.history.length > 1) navigate(-1);
+          else navigate('/dashboard');
+        }}
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600 hover:text-stone-900 transition active:scale-95"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        <span>Back to Dashboard</span>
+      </button>
+
       {/* Title */}
       <div>
         <h1 className="text-xl sm:text-2xl font-black text-brand-dark tracking-tight">Project Analysis & Ingestion</h1>

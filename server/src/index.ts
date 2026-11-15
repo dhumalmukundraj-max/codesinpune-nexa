@@ -10,6 +10,8 @@ import syncRouter from './routes/sync.js';
 import graphRouter from './routes/graph.js';
 import tasksRouter from './routes/tasks.js';
 import webhooksRouter from './routes/webhooks.js';
+import profilesRouter from './routes/profiles.js';
+import messagesRouter from './routes/messages.js';
 import { SchedulerService } from './services/schedulerService.js';
 
 const app = express();
@@ -38,6 +40,8 @@ app.use('/api/projects/:id/sync', syncRouter); // Feature 1: Continuous GitHub S
 app.use('/api/projects/:id/graph', graphRouter); // Feature 2: Interactive Knowledge Graph
 app.use('/api/projects/:id/tasks', tasksRouter); // Feature 3: Intelligent Roadmap & Tasks
 app.use('/api/webhooks', webhooksRouter); // Feature 1: GitHub Webhooks
+app.use('/api/profiles', profilesRouter); // Instagram-style User Profiles
+app.use('/api/messages', messagesRouter); // Built-in Real-Time Messenger
 app.use('/api/assistant', assistantRouter);
 
 // Root informational endpoint

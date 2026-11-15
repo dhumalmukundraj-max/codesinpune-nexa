@@ -7,6 +7,8 @@ import { NewAnalysis } from './pages/NewAnalysis';
 import { ProjectsList } from './pages/ProjectsList';
 import { ProjectDetails } from './pages/ProjectDetails';
 import { ReviewsList } from './pages/ReviewsList';
+import { ProfilePage } from './pages/ProfilePage';
+import { MessengerPage } from './pages/MessengerPage';
 import { LaunchAssistantWindow } from './pages/LaunchAssistantWindow';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -55,6 +57,8 @@ export const App: React.FC = () => {
             <Route path="/projects" element={<ProjectsList />} />
             <Route path="/projects/:id" element={<ProjectDetails />} />
             <Route path="/reviews" element={<ReviewsList />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/messages" element={<MessengerPage />} />
           </Route>
 
           {/* Catch-all redirect */}

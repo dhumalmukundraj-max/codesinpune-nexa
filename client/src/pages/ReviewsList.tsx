@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ClipboardCheck, CheckCircle2, Clock, ShieldCheck, ArrowRight, Layers } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ClipboardCheck, CheckCircle2, Clock, ShieldCheck, ArrowRight, ArrowLeft, Layers } from 'lucide-react';
 import { fetchProjects, launchAssistantWindow } from '../lib/api';
 import { ProjectItem } from '../types';
 import { PasswordPromptModal } from '../components/PasswordPromptModal';
 
 export const ReviewsList: React.FC = () => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [activeLockProject, setActiveLockProject] = useState<{ id: string; name: string } | null>(null);
@@ -27,6 +28,19 @@ export const ReviewsList: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
+      {/* Back button */}
+      <button
+        type="button"
+        onClick={() => {
+          if (window.history.length > 1) navigate(-1);
+          else navigate('/dashboard');
+        }}
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600 hover:text-stone-900 transition active:scale-95"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        <span>Back to Dashboard</span>
+      </button>
+
       <div>
         <h1 className="text-xl sm:text-2xl font-black text-brand-dark tracking-tight">Reviews & Handover Reports</h1>
         <p className="text-xs text-brand-muted mt-1">

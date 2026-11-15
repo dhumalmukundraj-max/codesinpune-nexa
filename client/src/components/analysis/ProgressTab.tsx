@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ProgressMetrics, ProjectSummary } from '../../types';
 import { 
   CheckCircle2, 
@@ -12,39 +12,76 @@ import {
   CheckSquare, 
   Square,
   Sparkles,
-  Info
+  Info,
+  Save,
+  RefreshCw,
+  Check
 } from 'lucide-react';
+import { ProgressCalculator } from '../../lib/progressCalculator';
+import { updateProjectProgress } from '../../lib/api';
 
 interface ProgressTabProps {
+  projectId?: string;
   metrics: ProgressMetrics;
   summary?: ProjectSummary;
+  onProgressUpdated?: (newPercentage: number, metrics: ProgressMetrics, summary: ProjectSummary) => void;
 }
 
-export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) => {
+export const ProgressTab: React.FC<ProgressTabProps> = ({
+  projectId,
+  metrics,
+  summary,
+  onProgressUpdated,
+}) => {
   const builtList = summary?.existingFunctionalities || [];
   const remainingList = summary?.unfinishedTasks || [];
 
-  // Initialize interactive checklist state:
-  // Built items start checked (true), remaining items start unchecked (false)
+  // Initialize checklist map:
+  // Built items are always completed (true)
+  // Remaining tasks check if status is 'completed' or isCompleted
   const [checkedMap, setCheckedMap] = useState<Record<string, boolean>>({});
   const [filterView, setFilterView] = useState<'all' | 'built' | 'remaining'>('all');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const initialMap: Record<string, boolean> = {};
     builtList.forEach((_, idx) => {
       initialMap[`built-${idx}`] = true;
     });
-    remainingList.forEach((_, idx) => {
-      initialMap[`rem-${idx}`] = false;
+    remainingList.forEach((item: any, idx) => {
+      initialMap[`rem-${idx}`] = Boolean(item.status === 'completed' || item.isCompleted);
     });
     setCheckedMap(initialMap);
+    setHasUnsavedChanges(false);
   }, [summary]);
 
-  const toggleItem = (key: string) => {
-    setCheckedMap((prev) => ({
-      ...prev,
-      [key]: !prev[key],
+  // Compute authoritative dynamic progress using centralized calculator
+  const progressResult = useMemo(() => {
+    const simulatedRemaining = remainingList.map((t: any, idx: number) => ({
+      ...t,
+      status: checkedMap[`rem-${idx}`] ? 'completed' : (t.status === 'in_progress' ? 'in_progress' : 'pending'),
+      isCompleted: Boolean(checkedMap[`rem-${idx}`]),
     }));
+
+    return ProgressCalculator.calculate(
+      builtList,
+      simulatedRemaining,
+      metrics?.completionPercentage || 0
+    );
+  }, [builtList, remainingList, checkedMap, metrics]);
+
+  const percentage = progressResult.completionPercentage;
+  const isCompleted100 = percentage === 100;
+
+  const toggleItem = (key: string) => {
+    setCheckedMap((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      setHasUnsavedChanges(true);
+      return next;
+    });
   };
 
   const handleResetChecklist = () => {
@@ -56,24 +93,53 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
       resetMap[`rem-${idx}`] = false;
     });
     setCheckedMap(resetMap);
+    setHasUnsavedChanges(true);
   };
 
-  // Calculate live dynamic percentage based on checkboxes
-  const totalTasks = builtList.length + remainingList.length;
-  const checkedCount = Object.values(checkedMap).filter(Boolean).length;
-  
-  const percentage = totalTasks > 0
-    ? Math.round((checkedCount / totalTasks) * 100)
-    : Math.min(Math.max(metrics?.completionPercentage || 0, 0), 100);
+  // Persist progress and recalculate authoritative completion percentage
+  const handleSaveProgress = async () => {
+    if (!projectId) return;
 
-  const isCompleted100 = percentage === 100;
+    setIsSaving(true);
+    setErrorMessage(null);
+    setSaveSuccess(false);
+
+    try {
+      const res = await updateProjectProgress(projectId, { checkedMap });
+      setHasUnsavedChanges(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+
+      if (onProgressUpdated && res.completionPercentage !== undefined) {
+        onProgressUpdated(res.completionPercentage, res.progressMetrics, res.summary);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to save progress to database.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const problemStatement = metrics?.problemStatement || 
     summary?.introduction?.description || 
     summary?.introduction?.tagline || 
     'Core problem statement and desired output of this software project.';
 
+  const totalTasks = builtList.length + remainingList.length;
+
   return (
     <div className="space-y-6 sm:space-y-8">
+      {/* Alert Notices */}
+      {errorMessage && (
+        <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-2xl text-red-800 text-xs font-medium">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button onClick={() => setErrorMessage(null)} className="text-red-500 font-bold ml-2">×</button>
+        </div>
+      )}
+
       {/* 1. Core Problem Statement & Completion Card */}
       <div className="bg-white rounded-2xl sm:rounded-3xl border border-brand-border p-4 sm:p-8 shadow-sm space-y-5 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-brand-border">
@@ -83,15 +149,38 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
               <span>Core Problem Statement Evaluation</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-brand-dark tracking-tight">
-              Project Completion Metric
+              Authoritative Project Completion
             </h2>
+            <p className="text-xs text-stone-500 font-mono">
+              Centralized calculation: Synchronized across Dashboard and Progress View
+            </p>
           </div>
 
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl sm:text-5xl font-black text-brand-primary tracking-tight">
-              {percentage}%
-            </span>
-            <span className="text-xs font-semibold text-brand-muted uppercase">Complete</span>
+          <div className="flex items-center gap-4 self-start sm:self-auto">
+            {hasUnsavedChanges && projectId && (
+              <button
+                type="button"
+                onClick={handleSaveProgress}
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#C1121F] hover:bg-[#9B0E19] text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95 disabled:opacity-60"
+              >
+                {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                <span>{isSaving ? 'Saving...' : 'Save & Sync Progress'}</span>
+              </button>
+            )}
+
+            {saveSuccess && (
+              <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 text-xs font-semibold animate-in fade-in">
+                <Check className="w-3.5 h-3.5" /> Progress Synced
+              </span>
+            )}
+
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl sm:text-5xl font-black text-brand-primary tracking-tight">
+                {percentage}%
+              </span>
+              <span className="text-xs font-semibold text-brand-muted uppercase">Complete</span>
+            </div>
           </div>
         </div>
 
@@ -109,7 +198,7 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
           <div className="flex items-center justify-between text-[11px] sm:text-xs text-brand-muted pt-1">
             <span>0% (Setup)</span>
             <span className="hidden xs:inline">50% (Core in Progress)</span>
-            <span className="font-semibold text-emerald-700">100% (Solved)</span>
+            <span className="font-semibold text-emerald-700">100% (Fully Solved)</span>
           </div>
         </div>
 
@@ -147,7 +236,7 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
           <div className="pt-3 border-t border-brand-border/60 flex items-start gap-2 text-[11px] text-stone-600">
             <Info className="w-4 h-4 text-brand-muted mt-0.5 flex-shrink-0" />
             <p className="leading-relaxed">
-              <strong>Calculation Basis:</strong> Evaluated strictly on whether the code solves the main problem statement and produces the desired output. Future implementations or optional roadmap items that users might add later are <strong>never</strong> calculated against completion percentage.
+              <strong>Centralized Calculation:</strong> Evaluated strictly on completed features ({progressResult.completedTasksCount} of {progressResult.totalTasksIdentified} tasks). Selecting checkboxes updates this project's database progress across both the Dashboard and the Progress Tab.
             </p>
           </div>
         </div>
@@ -161,12 +250,12 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
               Implementation Breakdown & Verification Checklist
             </h3>
             <p className="text-xs text-brand-muted mt-0.5">
-              Interactive checklist showing what is currently built till now vs what is remaining to reach 100%.
+              Check off completed tasks to update the authoritative completion percentage.
             </p>
           </div>
 
           {/* Filter & Reset Controls */}
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
             <div className="flex items-center bg-stone-100 p-1 rounded-xl text-xs overflow-x-auto no-scrollbar">
               <button
                 type="button"
@@ -208,11 +297,23 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
             <button
               type="button"
               onClick={handleResetChecklist}
-              title="Reset checklist to original AI analysis"
+              title="Reset checklist"
               className="p-2 rounded-xl border border-brand-border text-stone-500 hover:text-brand-dark hover:bg-stone-50 transition active:scale-95 flex-shrink-0"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
+
+            {hasUnsavedChanges && projectId && (
+              <button
+                type="button"
+                onClick={handleSaveProgress}
+                disabled={isSaving}
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#C1121F] hover:bg-[#9B0E19] text-white rounded-xl text-xs font-bold shadow-sm transition active:scale-95"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSaving ? 'Saving...' : 'Save'}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -297,7 +398,7 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
           </div>
         )}
 
-        {/* Section B: Remaining Implementations */}
+        {/* Section B: Remaining Implementations with Active Checkboxes */}
         {(filterView === 'all' || filterView === 'remaining') && (
           <div className="space-y-4 pt-4 border-t border-brand-border">
             <div className="flex items-center justify-between">
@@ -308,7 +409,7 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
                 </h4>
               </div>
               <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                Pending Work
+                Active Checkboxes
               </span>
             </div>
 
@@ -329,7 +430,7 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
                       onClick={() => toggleItem(key)}
                       className={`p-4 rounded-2xl border transition cursor-pointer flex items-start gap-3.5 ${
                         isChecked
-                          ? 'bg-emerald-50/40 border-emerald-200'
+                          ? 'bg-emerald-50/50 border-emerald-300 shadow-sm'
                           : 'bg-amber-50/30 border-amber-200/80 hover:border-amber-300'
                       }`}
                     >
@@ -347,16 +448,22 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ metrics, summary }) =>
                             {item.title}
                           </h5>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {item.priority && (
-                              <span
-                                className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                                  item.priority === 'high'
-                                    ? 'bg-red-100 text-red-800'
-                                    : 'bg-amber-100 text-amber-800'
-                                }`}
-                              >
-                                {item.priority} Priority
+                            {isChecked ? (
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                                <Check className="w-3 h-3" /> Completed
                               </span>
+                            ) : (
+                              item.priority && (
+                                <span
+                                  className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                                    item.priority === 'high'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {item.priority} Priority
+                                </span>
+                              )
                             )}
                             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-600">
                               {item.type}

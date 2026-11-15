@@ -9,7 +9,8 @@ import {
   Layers, 
   Cpu, 
   X,
-  User as UserIcon 
+  User as UserIcon,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { launchAssistantWindow } from '../lib/api';
@@ -33,7 +34,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/new-analysis', label: 'New Analysis', icon: PlusCircle },
     { to: '/projects', label: 'Saved Projects', icon: FolderKanban },
+    { to: '/messages', label: 'Messages', icon: MessageSquare },
     { to: '/reviews', label: 'Reviews & Handover', icon: ClipboardCheck },
+    { to: '/profile', label: 'My Profile', icon: UserIcon },
   ];
 
   const handleNavClick = () => {
@@ -124,7 +127,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
 
       {/* User Session Footer */}
       <div className="p-4 border-t border-brand-border bg-white flex items-center justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <NavLink
+          to="/profile"
+          onClick={handleNavClick}
+          className="flex items-center gap-2.5 min-w-0 hover:opacity-80 transition cursor-pointer"
+          title="View profile"
+        >
           <div className="w-8 h-8 rounded-full bg-brand-secondary/40 text-brand-dark flex items-center justify-center font-semibold text-xs flex-shrink-0">
             {user?.email ? user.email[0].toUpperCase() : <UserIcon className="w-4 h-4" />}
           </div>
@@ -132,9 +140,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
             <p className="text-xs font-semibold text-brand-dark truncate">
               {user?.user_metadata?.full_name || (user?.email ? user.email.split('@')[0] : 'Guest User')}
             </p>
-            <p className="text-[10px] text-brand-muted truncate">{user?.email || 'Not signed in'}</p>
+            <p className="text-[10px] text-brand-muted truncate">View Profile</p>
           </div>
-        </div>
+        </NavLink>
 
         {user && (
           <button

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { AuthenticatedRequest, requireAuth } from '../middleware/auth.js';
 import { supabaseAdmin, isConfigured, config } from '../config/index.js';
+import { ProgressCalculator } from '../services/progressCalculator.js';
 
 const router = Router();
 
@@ -73,6 +74,10 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response): 
       sourceType,
       repositoryUrl,
       files,
+      originalFilename,
+      originalFolderName,
+      originalLocalPath,
+      analysisMethod,
     } = req.body;
 
     if (!name || !analysis) {
@@ -88,7 +93,13 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response): 
       hasPassword = true;
     }
 
-    const completionPercentage = analysis.progressMetrics?.completionPercentage || 0;
+    // Authoritative calculation of completion percentage
+    const progressResult = ProgressCalculator.calculate(
+      analysis.summary?.existingFunctionalities || [],
+      analysis.summary?.unfinishedTasks || [],
+      analysis.progressMetrics?.completionPercentage || 0
+    );
+    const completionPercentage = progressResult.completionPercentage;
 
     // Insert project
     const { data: project, error: projErr } = await supabaseAdmin
@@ -105,6 +116,11 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response): 
         frameworks: frameworks || [],
         source_type: sourceType || 'folder',
         repository_url: repositoryUrl || null,
+        original_filename: originalFilename || null,
+        original_folder_name: originalFolderName || null,
+        original_local_path: originalLocalPath || null,
+        analysis_method: analysisMethod || sourceType || 'folder',
+        source_connection_status: 'active',
       })
       .select()
       .single();
@@ -120,7 +136,10 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response): 
         flowchart_mermaid: analysis.flowchartMermaid || '',
         block_diagram_mermaid: analysis.blockDiagramMermaid || '',
         roadmap: analysis.roadmap || { phases: [] },
-        progress_metrics: analysis.progressMetrics || {},
+        progress_metrics: {
+          ...(analysis.progressMetrics || {}),
+          ...progressResult,
+        },
         file_tree: files?.slice(0, 500) || [],
         raw_stats: {
           totalFiles: files?.length || 0,
@@ -352,5 +371,339 @@ router.delete('/:id', requireAuth, async (req: AuthenticatedRequest, res: Respon
   }
 });
 
+// 6. Update Project Progress & Task Checklist Status (Centralized Progress Sync)
+router.patch('/:id/progress', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!supabaseAdmin) {
+      res.status(503).json({ error: 'Database not available' });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const userId = req.user!.id;
+    const { checkedMap, taskUpdates } = req.body;
+
+    // Check permissions
+    const { data: project, error: projErr } = await supabaseAdmin
+      .from('projects')
+      .select('id, user_id, project_permissions(role, user_id)')
+      .eq('id', id)
+      .single();
+
+    if (projErr || !project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    const isOwner = project.user_id === userId;
+    const permission = project.project_permissions?.find((p: any) => p.user_id === userId);
+    if (!isOwner && !permission) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
+    // Fetch analysis
+    const { data: analysis, error: aErr } = await supabaseAdmin
+      .from('project_analyses')
+      .select('*')
+      .eq('project_id', id)
+      .single();
+
+    if (aErr || !analysis) {
+      res.status(404).json({ error: 'Analysis not found' });
+      return;
+    }
+
+    const summary = analysis.summary || {};
+    const built = summary.existingFunctionalities || [];
+    let remaining = summary.unfinishedTasks || [];
+
+    // Apply checklist updates
+    if (checkedMap && typeof checkedMap === 'object') {
+      remaining = remaining.map((t: any, idx: number) => {
+        const isChecked = checkedMap[`rem-${idx}`] ?? (t.status === 'completed' || t.isCompleted);
+        return {
+          ...t,
+          status: isChecked ? 'completed' : 'pending',
+          isCompleted: Boolean(isChecked),
+        };
+      });
+    } else if (taskUpdates && Array.isArray(taskUpdates)) {
+      remaining = taskUpdates;
+    }
+
+    summary.unfinishedTasks = remaining;
+
+    // Authoritative calculation
+    const progressResult = ProgressCalculator.calculate(
+      built,
+      remaining,
+      analysis.progress_metrics?.completionPercentage || 0
+    );
+
+    const now = new Date().toISOString();
+
+    // Persist to projects table
+    await supabaseAdmin
+      .from('projects')
+      .update({
+        completion_percentage: progressResult.completionPercentage,
+        updated_at: now,
+      })
+      .eq('id', id);
+
+    // Persist to project_analyses table
+    await supabaseAdmin
+      .from('project_analyses')
+      .update({
+        summary,
+        progress_metrics: {
+          ...(analysis.progress_metrics || {}),
+          ...progressResult,
+        },
+        updated_at: now,
+      })
+      .eq('project_id', id);
+
+    res.json({
+      success: true,
+      message: 'Project progress successfully updated and synchronized.',
+      completionPercentage: progressResult.completionPercentage,
+      progressMetrics: progressResult,
+      summary,
+    });
+  } catch (err: any) {
+    console.error('Update progress error:', err);
+    res.status(500).json({ error: 'Failed to update progress', message: err.message });
+  }
+});
+
+// 7. Comprehensive Save Project Endpoint
+router.put('/:id/save', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!supabaseAdmin) {
+      res.status(503).json({ error: 'Database not available' });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const userId = req.user!.id;
+    const { name, description, summary, roadmap, progressMetrics, flowchartMermaid, blockDiagramMermaid } = req.body;
+
+    const { data: project } = await supabaseAdmin
+      .from('projects')
+      .select('id, user_id')
+      .eq('id', id)
+      .single();
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    if (project.user_id !== userId) {
+      res.status(403).json({ error: 'Only project owner can save modifications.' });
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    // Compute progress if summary provided
+    let completionPercentage = undefined;
+    if (summary) {
+      const calc = ProgressCalculator.calculate(
+        summary.existingFunctionalities || [],
+        summary.unfinishedTasks || [],
+        progressMetrics?.completionPercentage || 0
+      );
+      completionPercentage = calc.completionPercentage;
+    }
+
+    // Update project record
+    const projectUpdates: any = { updated_at: now };
+    if (name) projectUpdates.name = name;
+    if (description !== undefined) projectUpdates.description = description;
+    if (completionPercentage !== undefined) projectUpdates.completion_percentage = completionPercentage;
+
+    await supabaseAdmin.from('projects').update(projectUpdates).eq('id', id);
+
+    // Update analysis record
+    const analysisUpdates: any = { updated_at: now };
+    if (summary) analysisUpdates.summary = summary;
+    if (roadmap) analysisUpdates.roadmap = roadmap;
+    if (progressMetrics) analysisUpdates.progress_metrics = progressMetrics;
+    if (flowchartMermaid !== undefined) analysisUpdates.flowchart_mermaid = flowchartMermaid;
+    if (blockDiagramMermaid !== undefined) analysisUpdates.block_diagram_mermaid = blockDiagramMermaid;
+
+    await supabaseAdmin.from('project_analyses').update(analysisUpdates).eq('project_id', id);
+
+    res.json({
+      success: true,
+      message: 'Project and all analyses saved successfully.',
+      completionPercentage,
+    });
+  } catch (err: any) {
+    console.error('Save project error:', err);
+    res.status(500).json({ error: 'Failed to save project', message: err.message });
+  }
+});
+
+// 8. Change Project Encryption Password (AES-256 Key Rotation)
+router.post('/:id/encryption/change-password', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!supabaseAdmin) {
+      res.status(503).json({ error: 'Database not available' });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const userId = req.user!.id;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    const { data: project } = await supabaseAdmin
+      .from('projects')
+      .select('id, user_id, has_password, project_password_hash')
+      .eq('id', id)
+      .single();
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    if (project.user_id !== userId) {
+      res.status(403).json({ error: 'Only the project owner can change the encryption password.' });
+      return;
+    }
+
+    // Verify current password if previously protected
+    if (project.has_password && project.project_password_hash) {
+      if (!currentPassword) {
+        res.status(400).json({ error: 'Current encryption password is required.' });
+        return;
+      }
+      const match = await bcrypt.compare(currentPassword, project.project_password_hash);
+      if (!match) {
+        res.status(401).json({ error: 'Current password verification failed. Please try again.' });
+        return;
+      }
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      res.status(400).json({ error: 'New password and confirmation password do not match.' });
+      return;
+    }
+
+    // Derive new password hash
+    const newHash = await bcrypt.hash(newPassword.trim(), 10);
+    const now = new Date().toISOString();
+
+    // Atomic update
+    await supabaseAdmin
+      .from('projects')
+      .update({
+        has_password: true,
+        project_password_hash: newHash,
+        encryption_updated_at: now,
+        updated_at: now,
+      })
+      .eq('id', id);
+
+    // Issue refreshed unlock token for immediate session continuity
+    const unlockToken = jwt.sign(
+      { projectId: project.id, authorized: true, userId },
+      config.jwtSecret,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Project encryption password successfully changed and verified.',
+      unlockToken,
+    });
+  } catch (err: any) {
+    console.error('Change password error:', err);
+    res.status(500).json({ error: 'Failed to update encryption password', message: err.message });
+  }
+});
+
+// 9. Remove Project Encryption Password Protection
+router.post('/:id/encryption/remove-password', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!supabaseAdmin) {
+      res.status(503).json({ error: 'Database not available' });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const userId = req.user!.id;
+    const { currentPassword, confirmRemove } = req.body;
+
+    const { data: project } = await supabaseAdmin
+      .from('projects')
+      .select('id, user_id, has_password, project_password_hash')
+      .eq('id', id)
+      .single();
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    if (project.user_id !== userId) {
+      res.status(403).json({ error: 'Only the project owner can remove password protection.' });
+      return;
+    }
+
+    if (!project.has_password) {
+      res.json({ success: true, message: 'Project is already unprotected.' });
+      return;
+    }
+
+    if (!confirmRemove) {
+      res.status(400).json({ error: 'Explicit confirmation is required to remove encryption protection.' });
+      return;
+    }
+
+    if (!currentPassword) {
+      res.status(400).json({ error: 'Current password is required to remove protection.' });
+      return;
+    }
+
+    const match = await bcrypt.compare(currentPassword, project.project_password_hash || '');
+    if (!match) {
+      res.status(401).json({ error: 'Current password verification failed. Protection was not removed.' });
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    // Safely remove password protection
+    await supabaseAdmin
+      .from('projects')
+      .update({
+        has_password: false,
+        project_password_hash: null,
+        encryption_updated_at: now,
+        updated_at: now,
+      })
+      .eq('id', id);
+
+    res.json({
+      success: true,
+      message: 'Password encryption protection successfully removed. Project is now accessible without a password.',
+    });
+  } catch (err: any) {
+    console.error('Remove password error:', err);
+    res.status(500).json({ error: 'Failed to remove encryption password', message: err.message });
+  }
+});
+
 export default router;
+
 

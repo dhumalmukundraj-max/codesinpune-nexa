@@ -2,7 +2,14 @@ export interface UserProfile {
   id: string;
   email: string;
   full_name?: string;
+  display_name?: string;
+  username?: string;
+  bio?: string;
+  public_id?: string;
   avatar_url?: string;
+  role?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ProjectSummary {
@@ -114,6 +121,14 @@ export interface ProjectItem {
   frameworks?: string[];
   source_type?: 'folder' | 'zip' | 'github' | 'desktop';
   repository_url?: string;
+  original_filename?: string;
+  original_folder_name?: string;
+  original_local_path?: string;
+  analysis_method?: 'zip_upload' | 'folder_upload' | 'local_path' | 'github_repo' | string;
+  source_connection_status?: string;
+  encryption_salt?: string;
+  key_version?: number;
+  encryption_updated_at?: string;
   userRole?: 'owner' | 'reviewer' | 'editor' | 'viewer';
   created_at: string;
   updated_at?: string;
@@ -283,5 +298,32 @@ export interface RoadmapPhaseGroup {
   totalCount: number;
   progressPercentage: number;
 }
+
+// ==========================================
+// Inbuilt Real-Time Messenger Types
+// ==========================================
+
+export interface ConversationItem {
+  id: string;
+  otherParticipant: UserProfile;
+  lastMessage?: {
+    content: string;
+    sender_id: string;
+    created_at: string;
+  };
+  unreadCount: number;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  sender_name?: string;
+  sender_avatar?: string;
+  content: string;
+  created_at: string;
+}
+
 
 

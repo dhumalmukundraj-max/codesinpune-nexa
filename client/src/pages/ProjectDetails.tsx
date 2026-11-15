@@ -20,15 +20,21 @@ import {
   GitBranch,
   Network,
   ListChecks,
-  Sparkles
+  Sparkles,
+  Save,
+  HardDrive,
+  Folder,
+  FileArchive,
+  Laptop
 } from 'lucide-react';
-import { fetchProjectDetails, deleteProject, submitProjectReview, launchAssistantWindow, unlockProject } from '../lib/api';
+import { fetchProjectDetails, deleteProject, submitProjectReview, launchAssistantWindow, unlockProject, saveProjectChanges } from '../lib/api';
 import { SummaryTab } from '../components/analysis/SummaryTab';
 import { MermaidViewer } from '../components/MermaidViewer';
 import { RoadmapTab } from '../components/analysis/RoadmapTab';
 import { ProgressTab } from '../components/analysis/ProgressTab';
 import { PasswordPromptModal } from '../components/PasswordPromptModal';
 import { ShareProjectModal } from '../components/ShareProjectModal';
+import { ProjectSecurityModal } from '../components/ProjectSecurityModal';
 import { GitHubSyncSection } from '../components/sync/GitHubSyncSection';
 import { KnowledgeGraphViewer } from '../components/graph/KnowledgeGraphViewer';
 import { IntelligentRoadmapSection } from '../components/roadmap/IntelligentRoadmapSection';
@@ -42,6 +48,9 @@ export const ProjectDetails: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
+  const [showSecurityModal, setShowSecurityModal] = useState<boolean>(false);
+  const [isSavingProject, setIsSavingProject] = useState<boolean>(false);
+  const [saveProjectStatus, setSaveProjectStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [activeTab, setActiveTab] = useState<'summary' | 'graph' | 'roadmap' | 'sync' | 'flowchart' | 'block' | 'progress'>('summary');
 
   // Password unlock state
@@ -142,6 +151,56 @@ export const ProjectDetails: React.FC = () => {
     }
   };
 
+  const handleSaveProjectChanges = async () => {
+    if (!id || !projectData) return;
+    setIsSavingProject(true);
+    setSaveProjectStatus('saving');
+    try {
+      await saveProjectChanges(id, {
+        name: projectData.project?.name,
+        description: projectData.project?.description,
+        summary: projectData.analysis?.summary,
+        roadmap: projectData.analysis?.roadmap,
+        progressMetrics: projectData.analysis?.progress_metrics,
+        flowchartMermaid: projectData.analysis?.flowchart_mermaid,
+        blockDiagramMermaid: projectData.analysis?.block_diagram_mermaid,
+      });
+      setSaveProjectStatus('saved');
+      setTimeout(() => setSaveProjectStatus('idle'), 3000);
+    } catch (err: any) {
+      setSaveProjectStatus('error');
+      alert(`Failed to save project changes: ${err.message}`);
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
+
+  const handleProgressUpdated = (newPercentage: number, newMetrics: any, newSummary: any) => {
+    setProjectData((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        project: {
+          ...prev.project,
+          completion_percentage: newPercentage,
+        },
+        analysis: {
+          ...prev.analysis,
+          summary: newSummary || prev.analysis?.summary,
+          progress_metrics: newMetrics || prev.analysis?.progress_metrics,
+        },
+      };
+    });
+  };
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/projects');
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-12 text-center text-xs text-brand-muted flex flex-col items-center justify-center space-y-3">
@@ -186,7 +245,7 @@ export const ProjectDetails: React.FC = () => {
       {/* Back button */}
       <button
         type="button"
-        onClick={() => navigate('/projects')}
+        onClick={handleBack}
         className="flex items-center gap-1.5 text-xs font-semibold text-brand-muted hover:text-brand-dark transition active:scale-95"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
@@ -333,6 +392,41 @@ export const ProjectDetails: React.FC = () => {
                 <span>GitHub Sync</span>
               </button>
 
+              {/* Security & Password Settings */}
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => setShowSecurityModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-stone-300 text-stone-800 text-xs font-semibold hover:bg-stone-50 transition active:scale-95"
+                  title="Project Encryption & Security"
+                >
+                  <KeyRound className="w-4 h-4 text-amber-600" />
+                  <span>Security</span>
+                </button>
+              )}
+
+              {/* Save Project Changes */}
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={handleSaveProjectChanges}
+                  disabled={isSavingProject}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-semibold transition active:scale-95 disabled:opacity-50"
+                  title="Save current project state to database"
+                >
+                  {isSavingProject ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-[#C1121F]" />}
+                  <span>
+                    {saveProjectStatus === 'saving'
+                      ? 'Saving...'
+                      : saveProjectStatus === 'saved'
+                      ? 'Saved!'
+                      : saveProjectStatus === 'error'
+                      ? 'Retry Save'
+                      : 'Save Project'}
+                  </span>
+                </button>
+              )}
+
               {/* Review / Handover */}
               {canReview && (
                 <button
@@ -404,6 +498,56 @@ export const ProjectDetails: React.FC = () => {
                 </span>
               </div>
             )}
+          </div>
+
+          {/* Analysis Source & Storage Transparency Card */}
+          <div className="mt-4 pt-4 border-t border-brand-border/60">
+            <div className="p-4 rounded-2xl bg-stone-50 border border-brand-border/80 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {project.source_type === 'zip' ? (
+                    <FileArchive className="w-4 h-4 text-amber-600" />
+                  ) : project.source_type === 'desktop' ? (
+                    <Laptop className="w-4 h-4 text-purple-600" />
+                  ) : project.source_type === 'github' ? (
+                    <GitBranch className="w-4 h-4 text-[#C1121F]" />
+                  ) : (
+                    <Folder className="w-4 h-4 text-blue-600" />
+                  )}
+                  <span className="text-xs font-bold text-stone-900">
+                    Analysis Source: <span className="uppercase">{project.analysis_method || project.source_type || 'Folder Upload'}</span>
+                  </span>
+                </div>
+
+                <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100/70 px-2.5 py-0.5 rounded-full self-start sm:self-auto">
+                  {project.source_connection_status || 'Active Connection'}
+                </span>
+              </div>
+
+              {/* Source Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-[11px] font-mono text-stone-600">
+                <div className="p-2.5 bg-white rounded-xl border border-stone-200">
+                  <span className="text-[10px] font-sans font-bold text-stone-400 uppercase tracking-wider block">Original Source Reference:</span>
+                  <p className="truncate text-stone-800 font-semibold mt-0.5" title={project.original_filename || project.original_folder_name || project.original_local_path || project.repository_url || project.name}>
+                    {project.original_filename || project.original_folder_name || project.original_local_path || project.repository_url || project.name}
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-stone-200">
+                  <span className="text-[10px] font-sans font-bold text-stone-400 uppercase tracking-wider block">Storage Transparency:</span>
+                  <p className="text-stone-800 font-sans mt-0.5">
+                    Reconstructed AST & Knowledge in Supabase
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-stone-200">
+                  <span className="text-[10px] font-sans font-bold text-stone-400 uppercase tracking-wider block">Source Filesystem:</span>
+                  <p className="text-stone-800 font-sans mt-0.5">
+                    {project.source_type === 'desktop' ? 'Remains on user local machine' : 'Reconstructed into Knowledge Model'}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -498,9 +642,30 @@ export const ProjectDetails: React.FC = () => {
 
           {/* Tab 7: Progress */}
           {activeTab === 'progress' && (
-            <ProgressTab metrics={analysis?.progress_metrics || analysis?.progressMetrics} summary={analysis?.summary} />
+            <ProgressTab
+              projectId={project.id}
+              metrics={analysis?.progress_metrics || analysis?.progressMetrics}
+              summary={analysis?.summary}
+              onProgressUpdated={handleProgressUpdated}
+            />
           )}
         </div>
+      )}
+
+      {/* Project Security & Encryption Modal */}
+      {showSecurityModal && project && (
+        <ProjectSecurityModal
+          projectId={project.id}
+          projectName={project.name}
+          hasPassword={Boolean(project.has_password)}
+          onClose={() => setShowSecurityModal(false)}
+          onSecurityUpdated={(newHasPassword) => {
+            setProjectData((prev: any) => ({
+              ...prev,
+              project: { ...prev.project, has_password: newHasPassword },
+            }));
+          }}
+        />
       )}
 
       {/* Share Modal */}

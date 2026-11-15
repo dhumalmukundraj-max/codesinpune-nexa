@@ -428,4 +428,201 @@ export async function deleteProjectTask(projectId: string, taskId: string) {
   return res.json();
 }
 
+// ==========================================
+// Centralized Progress & Project Saving APIs
+// ==========================================
+
+export async function updateProjectProgress(
+  projectId: string,
+  payload: { checkedMap?: Record<string, boolean>; taskUpdates?: any[] }
+) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/progress`, {
+    method: 'PATCH',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to update project progress');
+  }
+  return res.json();
+}
+
+export async function saveProjectChanges(projectId: string, payload: any) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/save`, {
+    method: 'PUT',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to save project changes');
+  }
+  return res.json();
+}
+
+// ==========================================
+// Project Encryption Password Management APIs
+// ==========================================
+
+export async function changeProjectPassword(
+  projectId: string,
+  payload: { currentPassword?: string; newPassword: string; confirmPassword: string }
+) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/encryption/change-password`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to change encryption password');
+  }
+  const data = await res.json();
+  if (data.unlockToken) {
+    sessionStorage.setItem(`ernexa_unlock_${projectId}`, data.unlockToken);
+    sessionStorage.setItem(`ernexa_assistant_unlock_${projectId}`, data.unlockToken);
+  }
+  return data;
+}
+
+export async function removeProjectPassword(
+  projectId: string,
+  payload: { currentPassword: string; confirmRemove: boolean }
+) {
+  const headers = await getAuthHeaders(projectId);
+  const res = await fetch(`${API_BASE}/projects/${projectId}/encryption/remove-password`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to remove password protection');
+  }
+  sessionStorage.removeItem(`ernexa_unlock_${projectId}`);
+  sessionStorage.removeItem(`ernexa_assistant_unlock_${projectId}`);
+  return res.json();
+}
+
+// ==========================================
+// Instagram-style User Profiles APIs
+// ==========================================
+
+export async function fetchMyProfile() {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/profiles/me`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load user profile');
+  }
+  return res.json();
+}
+
+export async function updateMyProfile(payload: {
+  username?: string;
+  display_name?: string;
+  bio?: string;
+  public_id?: string;
+  avatar_url?: string;
+}) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/profiles/me`, {
+    method: 'PATCH',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to update profile');
+  }
+  return res.json();
+}
+
+export async function searchProfiles(query: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/profiles/search?q=${encodeURIComponent(query)}`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'User search failed');
+  }
+  return res.json();
+}
+
+export async function fetchPublicProfile(idOrUsername: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/profiles/${encodeURIComponent(idOrUsername)}`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load public profile');
+  }
+  return res.json();
+}
+
+// ==========================================
+// Built-in Real-Time Messenger APIs
+// ==========================================
+
+export async function fetchConversations() {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/messages/conversations`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load conversations');
+  }
+  return res.json();
+}
+
+export async function startConversation(recipientId?: string, usernameOrId?: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/messages/conversations`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipientId, usernameOrId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to initiate conversation');
+  }
+  return res.json();
+}
+
+export async function fetchMessages(conversationId: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/messages`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load messages');
+  }
+  return res.json();
+}
+
+export async function sendChatMessage(conversationId: string, content: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/messages/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to send message');
+  }
+  return res.json();
+}
+
+
 
