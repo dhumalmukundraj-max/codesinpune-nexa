@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  FolderGit2, 
-  Sparkles, 
-  ArrowUpRight, 
-  Clock, 
-  Layers, 
-  ShieldCheck, 
-  Lock, 
-  Cpu, 
-  CheckCircle2, 
+import {
+  FolderGit2,
+  Sparkles,
+  ArrowUpRight,
+  Clock,
+  Layers,
+  ShieldCheck,
+  Lock,
+  Cpu,
+  CheckCircle2,
   AlertCircle,
   ExternalLink
 } from 'lucide-react';
@@ -122,6 +122,7 @@ export const Dashboard: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-5 border-b border-brand-border">
           <div>
             <h2 className="text-base font-bold text-brand-dark">Saved Projects</h2>
+            <p>Use For Password Protected File : Manthan@44</p>
             <p className="text-xs text-brand-muted">Stored codebase analyses and diagrams</p>
           </div>
           <Link

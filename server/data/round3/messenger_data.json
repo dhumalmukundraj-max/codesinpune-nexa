@@ -1,5 +1,107 @@
 {
-  "conversations": [],
+  "conversations": [
+    {
+      "id": "0f2f8645-6931-42cb-9334-3ab261bf7382",
+      "title": null,
+      "is_group": false,
+      "avatar_url": null,
+      "admin_id": null,
+      "description": null,
+      "participant_ids": [
+        "98bfed55-acfa-4c60-afcd-13d4f63c73bd",
+        "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1"
+      ],
+      "roles": {
+        "98bfed55-acfa-4c60-afcd-13d4f63c73bd": "member",
+        "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1": "member"
+      },
+      "created_at": "2026-11-15T10:32:07.430523+00:00",
+      "updated_at": "2026-11-15T19:21:42.306+00:00",
+      "last_message": {
+        "content": "Is the project get ready for deployment??",
+        "sender_id": "98bfed55-acfa-4c60-afcd-13d4f63c73bd",
+        "sender_name": "Yogiraj Mali",
+        "created_at": "2026-11-15T19:21:42.306+00:00",
+        "message_type": "text",
+        "attachments_count": 0
+      }
+    },
+    {
+      "id": "0572f185-b527-4188-a6d5-ff6f0d38075b",
+      "title": null,
+      "is_group": false,
+      "avatar_url": null,
+      "admin_id": null,
+      "description": null,
+      "participant_ids": [
+        "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1"
+      ],
+      "roles": {
+        "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1": "member"
+      },
+      "created_at": "2026-11-15T11:10:45.201288+00:00",
+      "updated_at": "2026-11-15T11:12:29.678+00:00"
+    },
+    {
+      "id": "8af51122-6d2a-41ea-80e8-c1b13149a26f",
+      "title": "Coders In Pune",
+      "is_group": true,
+      "avatar_url": "https://qrvgqobstghbhcusygmq.supabase.co/storage/v1/object/public/messenger-attachments/groups/8af51122-6d2a-41ea-80e8-c1b13149a26f/avatar-1794770096633-EARTH_NIGHT.jpeg",
+      "admin_id": "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1",
+      "description": "Hackthon Team - Last Commit",
+      "participant_ids": [
+        "98bfed55-acfa-4c60-afcd-13d4f63c73bd",
+        "6dfe23ff-772d-4633-a36f-fa4a96dd2871",
+        "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1"
+      ],
+      "roles": {
+        "98bfed55-acfa-4c60-afcd-13d4f63c73bd": "member",
+        "6dfe23ff-772d-4633-a36f-fa4a96dd2871": "member",
+        "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1": "admin"
+      },
+      "created_at": "2026-11-15T19:00:47.37+00:00",
+      "updated_at": "2026-11-15T19:22:44.029+00:00",
+      "last_message": {
+        "content": "Ok",
+        "sender_id": "6dfe23ff-772d-4633-a36f-fa4a96dd2871",
+        "sender_name": "Aditya Mali",
+        "created_at": "2026-11-16T03:17:33.733+00:00",
+        "message_type": "text",
+        "attachments_count": 0
+      }
+    },
+    {
+      "id": "578aa69a-c0a2-4aa6-90d2-1c4fd12d1149",
+      "title": null,
+      "is_group": false,
+      "avatar_url": null,
+      "admin_id": null,
+      "description": null,
+      "participant_ids": [
+        "6dfe23ff-772d-4633-a36f-fa4a96dd2871",
+        "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1"
+      ],
+      "roles": {
+        "6dfe23ff-772d-4633-a36f-fa4a96dd2871": "member",
+        "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1": "member"
+      },
+      "created_at": "2026-11-15T19:02:02.004+00:00",
+      "updated_at": "2026-11-15T19:02:16.056+00:00",
+      "last_message": {
+        "content": "hiii",
+        "sender_id": "9ab9f90f-99e3-49cd-a1e5-e3922adf43e1",
+        "sender_name": "Mukundraj Dhumal",
+        "created_at": "2026-11-15T19:02:16.056+00:00",
+        "message_type": "text",
+        "attachments_count": 0
+      }
+    }
+  ],
   "messages": [],
-  "reads": {}
+  "reads": {
+    "0572f185-b527-4188-a6d5-ff6f0d38075b:9ab9f90f-99e3-49cd-a1e5-e3922adf43e1": "2026-11-15T19:18:52.298+00:00",
+    "0f2f8645-6931-42cb-9334-3ab261bf7382:9ab9f90f-99e3-49cd-a1e5-e3922adf43e1": "2026-11-15T19:18:57.934+00:00",
+    "578aa69a-c0a2-4aa6-90d2-1c4fd12d1149:9ab9f90f-99e3-49cd-a1e5-e3922adf43e1": "2026-11-16T08:33:15.012+00:00",
+    "8af51122-6d2a-41ea-80e8-c1b13149a26f:9ab9f90f-99e3-49cd-a1e5-e3922adf43e1": "2026-11-15T19:16:16.569+00:00"
+  }
 }

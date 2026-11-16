@@ -60,7 +60,7 @@ export const Login: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-brand-dark mb-1">
-              Email Address
+              Email Address ( use : dhumalmukundraj@gmail.com )
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-brand-muted absolute left-3 top-2.5" />
@@ -77,7 +77,7 @@ export const Login: React.FC = () => {
 
           <div>
             <label className="block text-xs font-semibold text-brand-dark mb-1">
-              Password
+              Password ( use : Manthan@44 )
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-brand-muted absolute left-3 top-2.5" />

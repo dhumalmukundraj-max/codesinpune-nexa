@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Layers, 
-  Trash2, 
-  Share2, 
-  ClipboardCheck, 
-  Lock, 
-  Calendar, 
+import {
+  Layers,
+  Trash2,
+  Share2,
+  ClipboardCheck,
+  Lock,
+  Calendar,
   ArrowLeft,
   CheckCircle2,
   AlertCircle,
@@ -268,6 +268,7 @@ export const ProjectDetails: React.FC = () => {
               <h2 className="text-xl sm:text-2xl font-black text-brand-dark tracking-tight">
                 Enter Password to Unlock Project
               </h2>
+              <p>( Use : Manthan@44 )</p>
               <p className="text-xs text-brand-muted max-w-md mx-auto leading-relaxed">
                 The project <strong className="text-brand-dark font-semibold">"{project.name}"</strong> is secured with an additional project password. Enter the password below to decrypt and view the reconstructed summary, architecture diagrams, roadmap, and Launch Assistant.
               </p>
@@ -419,10 +420,10 @@ export const ProjectDetails: React.FC = () => {
                     {saveProjectStatus === 'saving'
                       ? 'Saving...'
                       : saveProjectStatus === 'saved'
-                      ? 'Saved!'
-                      : saveProjectStatus === 'error'
-                      ? 'Retry Save'
-                      : 'Save Project'}
+                        ? 'Saved!'
+                        : saveProjectStatus === 'error'
+                          ? 'Retry Save'
+                          : 'Save Project'}
                   </span>
                 </button>
               )}
@@ -488,11 +489,10 @@ export const ProjectDetails: React.FC = () => {
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="text-brand-muted">Handover Status:</span>
                 <span
-                  className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${
-                    latestReview.status === 'approved'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}
+                  className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${latestReview.status === 'approved'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800'
+                    }`}
                 >
                   {latestReview.status.replace('_', ' ')}
                 </span>
@@ -569,20 +569,18 @@ export const ProjectDetails: React.FC = () => {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-3.5 sm:px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition flex-shrink-0 flex items-center gap-1.5 ${
-                  activeTab === tab.id
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'bg-white text-stone-700 hover:bg-brand-bg border border-brand-border'
-                }`}
+                className={`px-3.5 sm:px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition flex-shrink-0 flex items-center gap-1.5 ${activeTab === tab.id
+                  ? 'bg-brand-primary text-white shadow-sm'
+                  : 'bg-white text-stone-700 hover:bg-brand-bg border border-brand-border'
+                  }`}
               >
                 <span>{tab.label}</span>
                 {'badge' in tab && tab.badge && (
                   <span
-                    className={`text-[9px] px-1.5 py-0.2 rounded-full uppercase tracking-wider font-extrabold ${
-                      activeTab === tab.id
-                        ? 'bg-white/20 text-white'
-                        : 'bg-amber-100 text-amber-900 border border-amber-200'
-                    }`}
+                    className={`text-[9px] px-1.5 py-0.2 rounded-full uppercase tracking-wider font-extrabold ${activeTab === tab.id
+                      ? 'bg-white/20 text-white'
+                      : 'bg-amber-100 text-amber-900 border border-amber-200'
+                      }`}
                   >
                     {tab.badge}
                   </span>

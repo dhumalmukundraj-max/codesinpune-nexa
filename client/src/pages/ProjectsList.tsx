@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  FolderGit2, 
-  Search, 
-  Sparkles, 
-  Layers, 
-  Lock, 
-  ArrowUpRight, 
+import {
+  FolderGit2,
+  Search,
+  Sparkles,
+  Layers,
+  Lock,
+  ArrowUpRight,
   Calendar,
   Filter
 } from 'lucide-react';
