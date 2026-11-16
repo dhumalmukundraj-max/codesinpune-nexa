@@ -358,5 +358,285 @@ export interface ChatMessage {
   isUploading?: boolean;
 }
 
+// ==========================================
+// Knowledge Handover Centre Types
+// ==========================================
+
+export type HandoverStatus =
+  | 'DRAFT'
+  | 'GENERATING'
+  | 'UNDER_REVIEW'
+  | 'REVISION_REQUIRED'
+  | 'APPROVED'
+  | 'SHARED'
+  | 'ACKNOWLEDGED'
+  | 'ARCHIVED';
+
+export type ClaimVerificationStatus =
+  | 'VERIFIED FACT'
+  | 'AI INFERENCE'
+  | 'UNKNOWN'
+  | 'CONFLICTING INFORMATION';
+
+export interface HandoverSectionA {
+  projectName: string;
+  tagline: string;
+  summary: string;
+  purpose: string;
+  businessContext: string;
+  techStack: string[];
+  repositoryOverview: string;
+}
+
+export interface HandoverSectionB {
+  architecturalPattern: string;
+  coreComponents: Array<{ name: string; purpose: string; location: string }>;
+  dataFlowDescription: string;
+  keyServices: string[];
+}
+
+export interface HandoverSectionC {
+  functionalities: Array<{
+    title: string;
+    description: string;
+    filesInvolved: string[];
+    status: 'fully_implemented' | 'partially_implemented';
+    verification: 'VERIFIED FACT' | 'AI INFERENCE';
+  }>;
+}
+
+export interface HandoverSectionD {
+  decisions: Array<{
+    topic: string;
+    decision: string;
+    rationale: string;
+    tradeOffs: string;
+    evidenceFile?: string;
+    status: 'VERIFIED FACT' | 'AI INFERENCE';
+  }>;
+}
+
+export interface HandoverSectionE {
+  overallHealth: string;
+  completionRatePercent: number;
+  readinessSummary: string;
+  activeDeployments: string[];
+  keyHighlights: string[];
+}
+
+export interface HandoverSectionF {
+  completedWork: Array<{
+    item: string;
+    description: string;
+    impact: string;
+    files: string[];
+  }>;
+}
+
+export interface HandoverSectionG {
+  pendingWork: Array<{
+    title: string;
+    description: string;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+    blockingReason?: string;
+    location?: string;
+    type: string;
+  }>;
+}
+
+export interface HandoverSectionH {
+  ownershipBreakdown: Array<{
+    area: string;
+    currentOwner: string;
+    suggestedIncomingOwner: string;
+    handoverNotes: string;
+  }>;
+}
+
+export interface HandoverSectionI {
+  dependencies: Array<{
+    name: string;
+    purpose: string;
+    version?: string;
+    category: string;
+    riskLevel: 'low' | 'medium' | 'high';
+  }>;
+  externalAPIs: string[];
+  environmentRequirements: Array<{ key: string; description: string; required: boolean }>;
+}
+
+export interface HandoverSectionJ {
+  risksAndBlockers: Array<{
+    risk: string;
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    mitigationStrategy: string;
+    impactArea: string;
+  }>;
+}
+
+export interface HandoverSectionK {
+  unresolvedQuestions: Array<{
+    question: string;
+    context: string;
+    recommendedInvestigation: string;
+    urgency: 'high' | 'medium' | 'low';
+  }>;
+}
+
+export interface HandoverSectionL {
+  recommendedNextActions: Array<{
+    stepNumber: number;
+    title: string;
+    actionDescription: string;
+    targetFileOrArea: string;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+    immediate: boolean;
+  }>;
+}
+
+export interface HandoverSectionM {
+  resources: Array<{
+    title: string;
+    category: 'documentation' | 'runbook' | 'repository' | 'environment' | 'contact';
+    linkOrPath: string;
+    description: string;
+  }>;
+}
+
+export interface HandoverGeneratedContent {
+  sectionA: HandoverSectionA;
+  sectionB: HandoverSectionB;
+  sectionC: HandoverSectionC;
+  sectionD: HandoverSectionD;
+  sectionE: HandoverSectionE;
+  sectionF: HandoverSectionF;
+  sectionG: HandoverSectionG;
+  sectionH: HandoverSectionH;
+  sectionI: HandoverSectionI;
+  sectionJ: HandoverSectionJ;
+  sectionK: HandoverSectionK;
+  sectionL: HandoverSectionL;
+  sectionM: HandoverSectionM;
+}
+
+export interface HandoverClaim {
+  id: string;
+  handover_id: string;
+  section_key: string;
+  claim_text: string;
+  category: string;
+  verification_status: ClaimVerificationStatus;
+  confidence_score: number;
+  source_type: string;
+  source_identifier?: string;
+  file_path?: string;
+  line_reference?: string;
+  supporting_excerpt?: string;
+  is_verified: boolean;
+  verified_by?: string;
+  verified_at?: string;
+  reviewer_notes?: string;
+  created_at: string;
+  updated_at: string;
+  verifierProfile?: UserProfile;
+}
+
+export interface HandoverVersion {
+  id: string;
+  handover_id: string;
+  version_number: number;
+  snapshot: HandoverGeneratedContent;
+  editor_id?: string;
+  change_summary?: string;
+  status_at_version: string;
+  created_at: string;
+  editorProfile?: UserProfile;
+}
+
+export interface HandoverComment {
+  id: string;
+  handover_id: string;
+  author_id: string;
+  section_key?: string;
+  claim_id?: string;
+  comment_type: 'general' | 'review_note' | 'clarification_request' | 'correction';
+  content: string;
+  is_resolved: boolean;
+  created_at: string;
+  updated_at: string;
+  authorProfile?: UserProfile;
+}
+
+export interface ContinuationChecklistItem {
+  id: string;
+  title: string;
+  description: string;
+  relatedSection: string;
+  status: 'pending' | 'understood' | 'in_progress' | 'completed';
+  notes?: string;
+}
+
+export interface HandoverAcknowledgement {
+  id: string;
+  handover_id: string;
+  member_id: string;
+  version_number: number;
+  checklist_state: Record<string, any>;
+  comments?: string;
+  missing_information_reported?: string;
+  status: 'CONFIRMED' | 'NEEDS_CLARIFICATION';
+  created_at: string;
+  memberProfile?: UserProfile;
+}
+
+export interface HandoverNotification {
+  id: string;
+  handover_id: string;
+  recipient_id: string;
+  sender_id?: string;
+  type: string;
+  title: string;
+  message: string;
+  is_read: boolean;
+  metadata?: any;
+  created_at: string;
+  senderProfile?: UserProfile;
+}
+
+export interface ProjectHandoverItem {
+  id: string;
+  project_id: string;
+  title: string;
+  description?: string;
+  creator_id: string;
+  outgoing_member_id?: string;
+  incoming_member_id?: string;
+  reviewer_id?: string;
+  status: HandoverStatus;
+  content: HandoverGeneratedContent;
+  original_ai_content?: HandoverGeneratedContent;
+  current_version: number;
+  approved_at?: string;
+  approved_by?: string;
+  shared_at?: string;
+  acknowledged_at?: string;
+  acknowledged_by?: string;
+  metadata?: {
+    targetDate?: string;
+    focusAreas?: string;
+    notes?: string;
+    checklist?: ContinuationChecklistItem[];
+    [key: string]: any;
+  };
+  created_at: string;
+  updated_at: string;
+  projectName?: string;
+  creatorProfile?: UserProfile;
+  outgoingProfile?: UserProfile;
+  incomingProfile?: UserProfile;
+  reviewerProfile?: UserProfile;
+}
+
+
 
 

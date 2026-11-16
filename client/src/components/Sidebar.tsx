@@ -10,7 +10,8 @@ import {
   Cpu, 
   X,
   User as UserIcon,
-  MessageSquare
+  MessageSquare,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMessageNotifications } from '../context/MessageNotificationContext';
@@ -37,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { to: '/new-analysis', label: 'New Analysis', icon: PlusCircle },
     { to: '/projects', label: 'Saved Projects', icon: FolderKanban },
     { to: '/messages', label: 'Messages', icon: MessageSquare },
-    { to: '/reviews', label: 'Reviews & Handover', icon: ClipboardCheck },
+    { to: '/handover', label: 'Knowledge Handover', icon: ShieldCheck },
     { to: '/profile', label: 'My Profile', icon: UserIcon },
   ];
 

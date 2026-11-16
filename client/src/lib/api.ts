@@ -1003,5 +1003,217 @@ export async function removeGroupMember(conversationId: string, memberId: string
   return res.json();
 }
 
+// ==========================================
+// Knowledge Handover Centre API Endpoints
+// ==========================================
+
+export async function fetchHandovers() {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers`, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to fetch handovers');
+  }
+  return res.json();
+}
+
+export async function fetchHandoverDetail(id: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/${id}`, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to fetch handover details');
+  }
+  return res.json();
+}
+
+export async function createHandover(payload: {
+  project_id: string;
+  title: string;
+  description?: string;
+  outgoing_member_id?: string;
+  incoming_member_id?: string;
+  reviewer_id?: string;
+  target_date?: string;
+  notes?: string;
+  focus_areas?: string;
+}) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to create handover');
+  }
+  return res.json();
+}
+
+export async function updateHandoverContent(
+  id: string,
+  content: any,
+  change_summary?: string
+) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/${id}/content`, {
+    method: 'PUT',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, change_summary }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to update handover content');
+  }
+  return res.json();
+}
+
+export async function verifyHandoverClaim(
+  handoverId: string,
+  claimId: string,
+  verification_status: string,
+  reviewer_notes?: string
+) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/${handoverId}/claims/${claimId}/verify`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ verification_status, reviewer_notes }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to verify claim');
+  }
+  return res.json();
+}
+
+export async function submitHandoverForReview(id: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/${id}/submit-review`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to submit handover for review');
+  }
+  return res.json();
+}
+
+export async function reviewHandoverDecision(
+  id: string,
+  decision: 'APPROVED' | 'REVISION_REQUIRED',
+  notes: string
+) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/${id}/review`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision, notes }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to submit review decision');
+  }
+  return res.json();
+}
+
+export async function shareHandover(id: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/${id}/share`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to share handover');
+  }
+  return res.json();
+}
+
+export async function updateHandoverChecklist(id: string, checklist: any[]) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/${id}/checklist`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ checklist }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to update checklist');
+  }
+  return res.json();
+}
+
+export async function acknowledgeHandover(
+  id: string,
+  payload: {
+    checklist_state: any;
+    comments?: string;
+    missing_information_reported?: string;
+    status: 'CONFIRMED' | 'NEEDS_CLARIFICATION';
+    version_number: number;
+  }
+) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/${id}/acknowledge`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to acknowledge handover');
+  }
+  return res.json();
+}
+
+export async function addHandoverComment(
+  id: string,
+  payload: {
+    content: string;
+    section_key?: string;
+    claim_id?: string;
+    comment_type?: 'general' | 'review_note' | 'clarification_request' | 'correction';
+  }
+) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/${id}/comments`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to add comment');
+  }
+  return res.json();
+}
+
+export async function fetchHandoverNotifications() {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/user/notifications`, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to fetch notifications');
+  }
+  return res.json();
+}
+
+export async function markHandoverNotificationRead(notifId: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/handovers/user/notifications/${notifId}/read`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to mark notification read');
+  }
+  return res.json();
+}
+
+
 
 

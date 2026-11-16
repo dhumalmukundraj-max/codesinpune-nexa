@@ -12,6 +12,7 @@ import tasksRouter from './routes/tasks.js';
 import webhooksRouter from './routes/webhooks.js';
 import profilesRouter from './routes/profiles.js';
 import messagesRouter from './routes/messages.js';
+import handoversRouter from './routes/handovers.js';
 import { SchedulerService } from './services/schedulerService.js';
 
 const app = express();
@@ -42,6 +43,7 @@ app.use('/api/projects/:id/tasks', tasksRouter); // Feature 3: Intelligent Roadm
 app.use('/api/webhooks', webhooksRouter); // Feature 1: GitHub Webhooks
 app.use('/api/profiles', profilesRouter); // Instagram-style User Profiles
 app.use('/api/messages', messagesRouter); // Built-in Real-Time Messenger
+app.use('/api/handovers', handoversRouter); // Knowledge Handover Centre
 app.use('/api/assistant', assistantRouter);
 
 // Root informational endpoint

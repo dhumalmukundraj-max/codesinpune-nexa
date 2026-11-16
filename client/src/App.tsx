@@ -8,6 +8,7 @@ import { NewAnalysis } from './pages/NewAnalysis';
 import { ProjectsList } from './pages/ProjectsList';
 import { ProjectDetails } from './pages/ProjectDetails';
 import { ReviewsList } from './pages/ReviewsList';
+import { KnowledgeHandoverCentre } from './pages/KnowledgeHandoverCentre';
 import { ProfilePage } from './pages/ProfilePage';
 import { MessengerPage } from './pages/MessengerPage';
 import { LaunchAssistantWindow } from './pages/LaunchAssistantWindow';
@@ -58,7 +59,8 @@ export const App: React.FC = () => {
               <Route path="/new-analysis" element={<NewAnalysis />} />
               <Route path="/projects" element={<ProjectsList />} />
               <Route path="/projects/:id" element={<ProjectDetails />} />
-              <Route path="/reviews" element={<ReviewsList />} />
+              <Route path="/handover" element={<KnowledgeHandoverCentre />} />
+              <Route path="/reviews" element={<KnowledgeHandoverCentre />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/messages" element={<MessengerPage />} />
             </Route>
