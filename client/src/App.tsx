@@ -10,6 +10,7 @@ import { ProjectDetails } from './pages/ProjectDetails';
 import { ReviewsList } from './pages/ReviewsList';
 import { KnowledgeHandoverCentre } from './pages/KnowledgeHandoverCentre';
 import { ProfilePage } from './pages/ProfilePage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { MessengerPage } from './pages/MessengerPage';
 import { LaunchAssistantWindow } from './pages/LaunchAssistantWindow';
 import { Login } from './pages/Login';
@@ -59,8 +60,38 @@ export const App: React.FC = () => {
               <Route path="/new-analysis" element={<NewAnalysis />} />
               <Route path="/projects" element={<ProjectsList />} />
               <Route path="/projects/:id" element={<ProjectDetails />} />
-              <Route path="/handover" element={<KnowledgeHandoverCentre />} />
-              <Route path="/reviews" element={<KnowledgeHandoverCentre />} />
+              <Route
+                path="/handover"
+                element={
+                  <ErrorBoundary fallbackTitle="Knowledge Handover Centre">
+                    <KnowledgeHandoverCentre />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/handover/:id"
+                element={
+                  <ErrorBoundary fallbackTitle="Knowledge Handover Centre">
+                    <KnowledgeHandoverCentre />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/reviews"
+                element={
+                  <ErrorBoundary fallbackTitle="Knowledge Handover Centre">
+                    <KnowledgeHandoverCentre />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/reviews/:id"
+                element={
+                  <ErrorBoundary fallbackTitle="Knowledge Handover Centre">
+                    <KnowledgeHandoverCentre />
+                  </ErrorBoundary>
+                }
+              />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/messages" element={<MessengerPage />} />
             </Route>

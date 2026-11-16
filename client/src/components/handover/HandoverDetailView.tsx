@@ -65,7 +65,7 @@ type TabType = 'document' | 'evidence' | 'review' | 'checklist' | 'versions' | '
 export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
   handover,
   claims: initialClaims,
-  versions,
+  versions: initialVersions,
   comments: initialComments,
   acknowledgement,
   currentUserId,
@@ -73,10 +73,11 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
   onRefresh,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('document');
-  const [claims, setClaims] = useState<HandoverClaim[]>(initialClaims);
-  const [comments, setComments] = useState<HandoverComment[]>(initialComments);
+  const [claims, setClaims] = useState<HandoverClaim[]>(Array.isArray(initialClaims) ? initialClaims : []);
+  const [versions, setVersions] = useState<HandoverVersion[]>(Array.isArray(initialVersions) ? initialVersions : []);
+  const [comments, setComments] = useState<HandoverComment[]>(Array.isArray(initialComments) ? initialComments : []);
   const [checklist, setChecklist] = useState<ContinuationChecklistItem[]>(
-    handover.metadata?.checklist || []
+    Array.isArray(handover?.metadata?.checklist) ? handover.metadata.checklist : []
   );
 
   // Claim filtering
@@ -269,10 +270,15 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
     }
   };
 
-  const content = handover.content || {};
+  const content = handover?.content || {};
+  const safeClaims = Array.isArray(claims) ? claims : [];
+  const safeComments = Array.isArray(comments) ? comments : [];
+  const safeChecklist = Array.isArray(checklist) ? checklist : [];
+  const safeVersions = Array.isArray(versions) ? versions : [];
+
   const filteredClaims = claimFilter === 'ALL'
-    ? claims
-    : claims.filter((c) => c.verification_status === claimFilter);
+    ? safeClaims
+    : safeClaims.filter((c) => c && c.verification_status === claimFilter);
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -438,7 +444,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
           }`}
         >
           <ShieldCheck className="w-3.5 h-3.5" />
-          Evidence & Claims ({claims.length})
+          Evidence & Claims ({safeClaims.length})
         </button>
 
         <button
@@ -464,7 +470,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
           }`}
         >
           <CheckSquare className="w-3.5 h-3.5" />
-          Incoming Checklist ({checklist.filter((i) => i.status === 'completed').length}/{checklist.length})
+          Incoming Checklist ({safeChecklist.filter((i) => i && i.status === 'completed').length}/{safeChecklist.length})
         </button>
 
         <button
@@ -477,7 +483,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
           }`}
         >
           <History className="w-3.5 h-3.5" />
-          Version Audit Trail ({versions.length || 1})
+          Version Audit Trail ({safeVersions.length || 1})
         </button>
 
         <button
@@ -490,7 +496,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
           }`}
         >
           <MessageSquare className="w-3.5 h-3.5" />
-          Questions & Notes ({comments.length})
+          Questions & Notes ({safeComments.length})
         </button>
       </div>
 
@@ -557,7 +563,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
               <div>
                 <span className="text-[10px] uppercase font-bold text-stone-400 block">Tech Stack & Frameworks</span>
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {(content.sectionA?.techStack || []).map((t: string, i: number) => (
+                  {(Array.isArray(content.sectionA?.techStack) ? content.sectionA.techStack : []).map((t: string, i: number) => (
                     <span key={i} className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-800 font-mono text-[11px]">
                       {t}
                     </span>
@@ -576,7 +582,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
             </div>
             <p className="text-xs text-stone-700">{content.sectionB?.dataFlowDescription}</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              {(content.sectionB?.coreComponents || []).map((comp: any, idx: number) => (
+              {(Array.isArray(content.sectionB?.coreComponents) ? content.sectionB.coreComponents : []).map((comp: any, idx: number) => (
                 <div key={idx} className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs">
                   <span className="font-bold text-stone-900 block">{comp.name}</span>
                   <span className="text-stone-500 font-mono text-[10px] block mb-1">{comp.location}</span>
@@ -593,7 +599,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
               <h3 className="font-bold text-stone-900 text-sm">Implemented Functionalities</h3>
             </div>
             <div className="space-y-2">
-              {(content.sectionC?.functionalities || []).map((fn: any, idx: number) => (
+              {(Array.isArray(content.sectionC?.functionalities) ? content.sectionC.functionalities : []).map((fn: any, idx: number) => (
                 <div key={idx} className="p-3 rounded-xl border border-stone-100 bg-stone-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                   <div>
                     <div className="flex items-center gap-2">
@@ -604,7 +610,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
                     </div>
                     <p className="text-stone-600 mt-0.5">{fn.description}</p>
                   </div>
-                  {fn.filesInvolved && fn.filesInvolved.length > 0 && (
+                  {Array.isArray(fn.filesInvolved) && fn.filesInvolved.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {fn.filesInvolved.map((f: string, fi: number) => (
                         <span key={fi} className="px-1.5 py-0.5 bg-white border border-stone-200 rounded font-mono text-[10px] text-stone-600">
@@ -625,7 +631,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
               <h3 className="font-bold text-stone-900 text-sm">Important Technical Decisions</h3>
             </div>
             <div className="space-y-2.5">
-              {(content.sectionD?.decisions || []).map((dec: any, idx: number) => (
+              {(Array.isArray(content.sectionD?.decisions) ? content.sectionD.decisions : []).map((dec: any, idx: number) => (
                 <div key={idx} className="p-3 rounded-xl border border-purple-100 bg-purple-50/20 text-xs space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-purple-900">{dec.topic}: {dec.decision}</span>
@@ -654,7 +660,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
               <div>
                 <span className="text-[10px] uppercase font-bold text-stone-400 block mb-1">Key Highlights</span>
                 <ul className="list-disc list-inside space-y-1 text-stone-700">
-                  {(content.sectionE?.keyHighlights || []).map((h: string, idx: number) => (
+                  {(Array.isArray(content.sectionE?.keyHighlights) ? content.sectionE.keyHighlights : []).map((h: string, idx: number) => (
                     <li key={idx}>{h}</li>
                   ))}
                 </ul>
@@ -671,7 +677,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
                 <h3 className="font-bold text-stone-900 text-sm">Completed Work</h3>
               </div>
               <div className="space-y-2 text-xs">
-                {(content.sectionF?.completedWork || []).map((w: any, idx: number) => (
+                {(Array.isArray(content.sectionF?.completedWork) ? content.sectionF.completedWork : []).map((w: any, idx: number) => (
                   <div key={idx} className="p-2.5 bg-emerald-50/40 rounded-xl border border-emerald-100">
                     <span className="font-bold text-emerald-950 block">{w.item}</span>
                     <p className="text-stone-600 mt-0.5">{w.description}</p>
@@ -688,7 +694,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
                 <h3 className="font-bold text-stone-900 text-sm">Incomplete & Pending Work</h3>
               </div>
               <div className="space-y-2 text-xs">
-                {(content.sectionG?.pendingWork || []).map((p: any, idx: number) => (
+                {(Array.isArray(content.sectionG?.pendingWork) ? content.sectionG.pendingWork : []).map((p: any, idx: number) => (
                   <div key={idx} className="p-2.5 bg-rose-50/40 rounded-xl border border-rose-100">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-rose-950">{p.title}</span>
@@ -713,7 +719,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
               <h3 className="font-bold text-stone-900 text-sm">Responsibilities & Ownership Transfer</h3>
             </div>
             <div className="space-y-2 text-xs">
-              {(content.sectionH?.ownershipBreakdown || []).map((o: any, idx: number) => (
+              {(Array.isArray(content.sectionH?.ownershipBreakdown) ? content.sectionH.ownershipBreakdown : []).map((o: any, idx: number) => (
                 <div key={idx} className="p-3 bg-stone-50 rounded-xl border border-stone-200 grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <span className="font-bold text-stone-900">{o.area}</span>
@@ -740,7 +746,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
                 <h3 className="font-bold text-stone-900 text-sm">Dependencies & Integrations</h3>
               </div>
               <div className="space-y-2 text-xs">
-                {(content.sectionI?.dependencies || []).map((d: any, idx: number) => (
+                {(Array.isArray(content.sectionI?.dependencies) ? content.sectionI.dependencies : []).map((d: any, idx: number) => (
                   <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-stone-50 border border-stone-100">
                     <div>
                       <span className="font-bold text-stone-950 font-mono">{d.name}</span>
@@ -759,7 +765,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
                 <h3 className="font-bold text-stone-900 text-sm">Known Risks & Blockers</h3>
               </div>
               <div className="space-y-2 text-xs">
-                {(content.sectionJ?.risksAndBlockers || []).map((r: any, idx: number) => (
+                {(Array.isArray(content.sectionJ?.risksAndBlockers) ? content.sectionJ.risksAndBlockers : []).map((r: any, idx: number) => (
                   <div key={idx} className="p-2.5 rounded-xl border border-orange-100 bg-orange-50/40">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-orange-950">{r.risk}</span>
@@ -781,7 +787,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
               <h3 className="font-bold text-stone-900 text-sm">Unresolved Questions</h3>
             </div>
             <div className="space-y-2 text-xs">
-              {(content.sectionK?.unresolvedQuestions || []).map((q: any, idx: number) => (
+              {(Array.isArray(content.sectionK?.unresolvedQuestions) ? content.sectionK.unresolvedQuestions : []).map((q: any, idx: number) => (
                 <div key={idx} className="p-3 bg-stone-50 rounded-xl border border-stone-200">
                   <span className="font-bold text-stone-900 block">{q.question}</span>
                   <p className="text-stone-600 mt-1">{q.context}</p>
@@ -798,7 +804,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
               <h3 className="font-bold text-stone-900 text-sm">Recommended Next Actions</h3>
             </div>
             <div className="space-y-2 text-xs">
-              {(content.sectionL?.recommendedNextActions || []).map((a: any, idx: number) => (
+              {(Array.isArray(content.sectionL?.recommendedNextActions) ? content.sectionL.recommendedNextActions : []).map((a: any, idx: number) => (
                 <div key={idx} className="p-3 rounded-xl border border-stone-200 bg-stone-50 flex items-start gap-3">
                   <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center shrink-0">
                     {a.stepNumber || idx + 1}
@@ -825,7 +831,7 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
               <h3 className="font-bold text-stone-900 text-sm">Important Resources & References</h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {(content.sectionM?.resources || []).map((r: any, idx: number) => (
+              {(Array.isArray(content.sectionM?.resources) ? content.sectionM.resources : []).map((r: any, idx: number) => (
                 <div key={idx} className="p-3 bg-stone-50 rounded-xl border border-stone-200">
                   <span className="font-bold text-stone-900 block">{r.title}</span>
                   <span className="font-mono text-[10px] text-amber-700 block mt-0.5">{r.linkOrPath}</span>
@@ -1054,32 +1060,32 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
           <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-3">
             <h4 className="font-bold text-stone-900 text-xs">Onboarding Verification Tasks</h4>
             <div className="space-y-2.5">
-              {checklist.map((item) => (
+              {safeChecklist.map((item) => (
                 <div
-                  key={item.id}
-                  onClick={() => handleToggleChecklistItem(item.id)}
+                  key={item?.id || Math.random().toString()}
+                  onClick={() => item?.id && handleToggleChecklistItem(item.id)}
                   className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3 text-xs ${
-                    item.status === 'completed'
+                    item?.status === 'completed'
                       ? 'bg-emerald-50/50 border-emerald-200 text-stone-600'
                       : 'bg-stone-50 border-stone-200 hover:bg-stone-100/60 text-stone-900'
                   }`}
                 >
                   <input
                     type="checkbox"
-                    checked={item.status === 'completed'}
+                    checked={item?.status === 'completed'}
                     onChange={() => {}} // handled by parent div
                     className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
                   />
                   <div className="flex-1">
-                    <span className={`font-bold ${item.status === 'completed' ? 'line-through text-stone-400' : 'text-stone-900'}`}>
-                      {item.title}
+                    <span className={`font-bold ${item?.status === 'completed' ? 'line-through text-stone-400' : 'text-stone-900'}`}>
+                      {item?.title}
                     </span>
-                    <p className="text-stone-600 mt-0.5">{item.description}</p>
+                    <p className="text-stone-600 mt-0.5">{item?.description}</p>
                   </div>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                    item.status === 'completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'
+                    item?.status === 'completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'
                   }`}>
-                    {item.status}
+                    {item?.status || 'pending'}
                   </span>
                 </div>
               ))}
@@ -1174,26 +1180,26 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
           </div>
 
           <div className="space-y-3">
-            {versions.length === 0 ? (
+            {safeVersions.length === 0 ? (
               <div className="p-8 text-center text-xs text-stone-500 bg-white rounded-2xl border border-stone-200">
                 Version 1 initialized at handover creation.
               </div>
             ) : (
-              versions.map((ver) => (
+              safeVersions.map((ver) => (
                 <div
-                  key={ver.id}
+                  key={ver?.id || Math.random().toString()}
                   className="p-4 bg-white rounded-2xl border border-stone-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 font-bold flex items-center justify-center border border-amber-200">
-                      v{ver.version_number}
+                      v{ver?.version_number || 1}
                     </div>
                     <div>
                       <span className="font-bold text-stone-900 text-sm">
-                        {ver.change_summary || `Version ${ver.version_number} Snapshot`}
+                        {ver?.change_summary || `Version ${ver?.version_number || 1} Snapshot`}
                       </span>
                       <p className="text-stone-500 text-[11px] mt-0.5">
-                        Recorded on {new Date(ver.created_at).toLocaleString()} • Status: <span className="font-semibold">{ver.status_at_version}</span>
+                        Recorded on {ver?.created_at ? new Date(ver.created_at).toLocaleString() : 'Recently'} • Status: <span className="font-semibold">{ver?.status_at_version || 'DRAFT'}</span>
                       </p>
                     </div>
                   </div>
@@ -1256,29 +1262,29 @@ export const HandoverDetailView: React.FC<HandoverDetailViewProps> = ({
 
           {/* Comments List */}
           <div className="space-y-3">
-            {comments.length === 0 ? (
+            {safeComments.length === 0 ? (
               <div className="p-8 text-center text-xs text-stone-500 bg-white rounded-2xl border border-stone-200">
                 No clarification messages yet. Start the conversation above!
               </div>
             ) : (
-              comments.map((cm) => (
-                <div key={cm.id} className="p-4 bg-white rounded-2xl border border-stone-200 shadow-sm space-y-2 text-xs">
+              safeComments.map((cm) => (
+                <div key={cm?.id || Math.random().toString()} className="p-4 bg-white rounded-2xl border border-stone-200 shadow-sm space-y-2 text-xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <img
-                        src={cm.authorProfile?.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${cm.author_id}`}
+                        src={cm?.authorProfile?.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${cm?.author_id || 'user'}`}
                         className="w-5 h-5 rounded-full"
                       />
-                      <span className="font-bold text-stone-900">{cm.authorProfile?.display_name || 'Team Member'}</span>
+                      <span className="font-bold text-stone-900">{cm?.authorProfile?.display_name || cm?.authorProfile?.full_name || 'Team Member'}</span>
                       <span className="px-1.5 py-0.5 rounded text-[10px] bg-stone-100 text-stone-600 uppercase font-semibold">
-                        {cm.comment_type}
+                        {cm?.comment_type || 'general'}
                       </span>
                     </div>
                     <span className="text-[10px] text-stone-400">
-                      {new Date(cm.created_at).toLocaleString()}
+                      {cm?.created_at ? new Date(cm.created_at).toLocaleString() : ''}
                     </span>
                   </div>
-                  <p className="text-stone-700 leading-relaxed pl-7">{cm.content}</p>
+                  <p className="text-stone-700 leading-relaxed pl-7">{cm?.content || ''}</p>
                 </div>
               ))
             )}
